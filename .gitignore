@@ -1,0 +1,12 @@
+Data/
+.DS_Store
+.ipynb_checkpoints
+*checkpoint*
+*.pyc
+__pycache__/
+nohup.out
+paths.py
+script.py
+*.yml
+*.pem
+.vscode
