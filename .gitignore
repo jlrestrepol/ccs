@@ -7,6 +7,5 @@ __pycache__/
 nohup.out
 paths.py
 script.py
-*.yml
 *.pem
 .vscode
