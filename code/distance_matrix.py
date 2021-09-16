@@ -37,14 +37,15 @@ def are_alligned(chain_one, chain_two):
 #%%
 print("Are the two chains alligned?", are_alligned(model_alpha["A"], model_rosetta["A"]))
 
-dist_matrix = calc_dist_matrix(model_alpha["A"], model_alpha["A"])
+dist_matrix_alpha = calc_dist_matrix(model_alpha["A"], model_alpha["A"])
+dist_matrix_rosetta = calc_dist_matrix(model_rosetta["A"], model_rosetta["A"])
 
-contact_map = dist_matrix < 12.0
+#contact_map = dist_matrix < 12.0
 
-res_list_one = numpy.fromiter((res.get_resname() for res in model_alpha.get_residues()), 
+res_list_alpha = numpy.fromiter((res.get_resname() for res in model_alpha.get_residues()), 
 dtype = 'S128', count = -1 )
 
-res_list_two = numpy.fromiter((res.get_resname() for res in model_rosetta.get_residues()), 
+res_list_rosetta = numpy.fromiter((res.get_resname() for res in model_rosetta.get_residues()), 
 dtype = 'S128', count = -1 )
 
 print("Minimum distance", numpy.min(dist_matrix))
