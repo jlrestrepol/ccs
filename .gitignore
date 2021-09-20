@@ -8,4 +8,5 @@ nohup.out
 paths.py
 script.py
 *.pem
+*.pdb
 .vscode
