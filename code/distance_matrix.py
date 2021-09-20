@@ -62,3 +62,10 @@ plt.xticks(numpy.arange(res_list_one.size), res_list_one.astype('str'), rotation
 plt.yticks(numpy.arange(res_list_two.size), res_list_two.astype('str'), rotation = 0)
 plt.show()
 # %%
+
+#Get sequences and possibly even peptides
+ppb = Bio.PDB.PPBuilder()
+
+peptide_list = []
+for pp in ppb.build_peptides(structure):
+    peptide_list.append(pp.get_sequence())
