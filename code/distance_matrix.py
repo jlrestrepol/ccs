@@ -4,6 +4,7 @@ import numpy
 import matplotlib.pyplot as plt 
 from itertools import chain
 import scipy.spatial
+import scipy
 #%%
 def calc_residue_dist(residue_one, residue_two) :
     """Returns the C-alpha distance between two residues"""
@@ -12,7 +13,7 @@ def calc_residue_dist(residue_one, residue_two) :
 
 def calc_dist_matrix(chain_one, chain_two) :
     """Returns a matrix of C-alpha distances between two chains"""
-    answer = numpy.zeros((len(chain_one), len(chain_two)), numpy.float)
+    answer = numpy.zeros((len(chain_one), len(chain_two)), numpy.float16)
     for row, residue_one in enumerate(chain_one):
         for col, residue_two in enumerate(chain_two) :
             answer[row, col] = calc_residue_dist(residue_one, residue_two)
@@ -20,8 +21,8 @@ def calc_dist_matrix(chain_one, chain_two) :
 
 def calc_dist_matrix_numpy(chain_one, chain_two):
     """Efficient implementation of distance matrix calculation"""
-    coords_one = numpy.fromiter( chain.from_iterable(res["CA"].coord for res in chain_one), dtype = 'f', count = -1)
-    coords_two = numpy.fromiter( chain.from_iterable(res["CA"].coord for res in chain_two), dtype = 'f', count = -1)
+    coords_one = numpy.fromiter( chain.from_iterable(res["CA"].coord for res in chain_one), dtype = 'f16', count = -1)
+    coords_two = numpy.fromiter( chain.from_iterable(res["CA"].coord for res in chain_two), dtype = 'f16', count = -1)
     coords_one_3d = coords_one.reshape((-1, 3))
     coords_two_3d = coords_two.reshape((-1, 3))
     distance_matrix = scipy.spatial.distance_matrix(coords_one_3d, coords_two_3d)
