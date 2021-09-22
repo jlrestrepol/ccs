@@ -9,9 +9,10 @@ import pandas as pd
 import Bio.PDB
 from distance_matrix import calc_dist_matrix_numpy
 import os
+import scipy
 
 #Set paths for reading MaxQuant output
-organism = 'ECOLI'
+organism = 'HUMAN'
 folder_path = '../Data/MaxQuant/'+organism+'/'
 file_path = 'peptides.txt'
 
@@ -22,22 +23,28 @@ df_peptides_filtered = df_peptides[df_peptides['Reverse']!='+']#Filter out rever
 df_pep_prot = df_peptides_filtered.loc[:,['Sequence','Proteins', 'Mass', 'Charges']]#Keep only useful features
 
 df_pep_prot['Proteins'] = df_pep_prot['Proteins'].apply(lambda x: x.split(';')[0])#Keep only the first protein - might have to change it
-seq_list = df_pep_prot['Sequence']
+
+#UNCOMMENT NEXT LINE IF ECOLI
+#df_pep_prot['Proteins'] = df_pep_prot['Proteins'].apply(lambda x: x[x.find('|')+1:x.rfind('|')])
+
+seq_list = df_pep_prot['Sequence'].values
 #Set paths for reading Alpha Fold 2 output from
 folder_path = '../Data/AlphaFold/'+organism+'/AF-'
 suffix = '-F1-model_v1.pdb'
 submatrix_list = []
 
+
+#%%
 #Iterate over the protein names
 for index, (label, prot_id) in enumerate(df_pep_prot['Proteins'].items()):
     #Get the data from the .pdb file
     
     file_path = folder_path+prot_id+suffix
     if not os.path.exists(file_path):
-        print(prot_id+' not found, skeaping to next protein')
+        print(prot_id+' not found, skeaping to next protein', index)
         submatrix_list.append(np.nan)
         continue
-    print(prot_id)
+    print(prot_id, seq_list[index], index)
     parser = Bio.PDB.PDBParser()# create parser
     structure_alpha = parser.get_structure("alpha",folder_path+prot_id+suffix)#get structure
     model_alpha = structure_alpha[0]#get model
@@ -55,7 +62,9 @@ for index, (label, prot_id) in enumerate(df_pep_prot['Proteins'].items()):
 
     #Extract submatrix
     submatrix = dist_matrix_alpha[start_index: final_index, start_index:final_index]
-    submatrix_list.append(submatrix)
+    submatrix_list.append(scipy.spatial.distance.squareform(submatrix))
+    '''if index == 500:
+        break'''
 
 df_pep_prot['Distance_matrix'] = submatrix_list
 results_folder = "../Data/Combined/"
