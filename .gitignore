@@ -10,3 +10,5 @@ script.py
 *.pem
 *.pdb
 .vscode
+*.zip
+*.csv
