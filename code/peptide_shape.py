@@ -12,7 +12,7 @@ import os
 import scipy
 
 #Set paths for reading MaxQuant output
-organism = 'CAEEL'
+organism = 'HUMAN'
 folder_path = '../Data/MaxQuant/'+organism+'/'
 file_path = 'peptides.txt'
 
