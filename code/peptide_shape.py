@@ -22,7 +22,7 @@ df_peptides_filtered = df_peptides[df_peptides['Reverse']!='+']#Filter out rever
 
 df_pep_prot = df_peptides_filtered.loc[:,['Sequence','Proteins', 'Mass', 'Charges']]#Keep only useful features
 
-df_pep_prot['Proteins'] = df_pep_prot['Proteins'].apply(lambda x: x.split(';')[0])#Keep only the first protein - might have to change it
+df_pep_prot['Proteins'] = df_pep_prot['Proteins'].apply(lambda x: x.split(';')[0])#Keep only the first protein, it's the most likely one
 df_pep_prot['Proteins'] = df_pep_prot['Proteins'].apply(lambda x: x.split("-")[0])
 df_pep_prot['Proteins'] = df_pep_prot['Proteins'].apply(lambda x: x.split("__")[-1])
 #UNCOMMENT NEXT LINE IF ECOLI
