@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 from pyteomics import mass, parser
 import numba  as nb
+import re
 
 # %%
 df = pd.read_csv('../dl_paper/SourceData_Figure_1.csv')
@@ -11,7 +12,10 @@ df_sup = pd.read_csv('../dl_paper/Supplementary_Data_1.csv')
 #%%
 db = mass.Unimod()
 aa_comp = dict(mass.std_aa_comp)
-aa_comp['C'] = db.by_title('CarbamidomethylDTT')['composition']
+aa_comp['C'] += db.by_title('Carbamidomethyl')['composition']
+aa_comp['(ac)'] = db.by_title('Acetyl')['composition']
+aa_comp['(ox)'] = db.by_title('Oxidation')['composition']
+
 
 
 # %%
@@ -31,7 +35,7 @@ aa2formula = {
     'N': {'C': 4, 'H': 8, 'N': 2, 'O': 3},
     'D': {'C': 4, 'H': 7, 'N': 1, 'O': 4},
     'C': {'C': 3, 'H': 7, 'N': 1, 'O': 2, 'S': 1},
-    'C(ca)': {'C': 5, 'H': 10, 'N': 2, 'O': 3, 'S': 1},
+    '(ac)': {'C': 2, 'H': 2, 'O': 1},
     'Q': {'C': 5, 'H': 10, 'N': 2, 'O': 3},
     'E': {'C': 5, 'H': 9, 'N': 1, 'O': 4},
     'G': {'C': 2, 'H': 5, 'N': 1, 'O': 2},
@@ -40,7 +44,7 @@ aa2formula = {
     'L': {'C': 6, 'H': 13, 'N': 1, 'O': 2},
     'K': {'C': 6, 'H': 14, 'N': 2, 'O': 2},
     'M': {'C': 5, 'H': 11, 'N': 1, 'O': 2, 'S': 1},
-    'M(ox)': {'C': 5, 'H': 11, 'N': 1, 'O': 3, 'S': 1},
+    '(ox)': {'O': 1},
     'F': {'C': 9, 'H': 11, 'N': 1, 'O': 2},
     'P': {'C': 5, 'H': 9, 'N': 1, 'O': 2},
     'S': {'C': 3, 'H': 7, 'N': 1, 'O': 3},
@@ -58,23 +62,23 @@ atom2mass = {
     'N': 14.00307400486,
     'S': 31.97207100
 }
-#aa2formula['C'] = {'C':4, 'H':9, 'N':1, 'O':3, 'S':1}#MQ: H2OCS
 aa2formula['C'] = {'C': 5, 'H': 10, 'N': 2, 'O': 3, 'S': 1}
 
 # %%
 def calculate_mass(seq):
     mass = 0
-    for aa in seq:
+    for aa in re.findall(r'\W..\W|[A-Z][a-z]?', seq):
         for atom, number_atoms in aa2formula[aa].items():
             mass += atom2mass[atom]*number_atoms
-    mass -= (len(seq)-1)*(2*atom2mass['H'] + atom2mass['O'])
+    aa_number = len(re.findall(r'[A-Z][a-z]?', seq))
+    mass -= (aa_number-1)*(2*atom2mass['H'] + atom2mass['O'])
     return mass 
 
 # %%
-mass_calc = unmodified_seq.loc[:10000,'Modified sequence'].apply(calculate_mass)
-mask = np.isclose(unmodified_seq.loc[:10000,'Mass'], mass_calc, atol = 1e-1)
-unmodified_seq.loc[:10000, ['Modified sequence', 'Mass']][mask]
+mass_calc = modified_seq.loc[:,'Modified sequence'].apply(calculate_mass)
+mask = np.isclose(modified_seq.loc[:,'Mass'], mass_calc, atol = 1e-1)
+modified_seq.loc[:, ['Modified sequence', 'Mass']][~mask]
 # %%
-mass_calc[mask]
+mass_calc[~mask]
 
 # %%
