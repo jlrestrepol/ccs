@@ -39,11 +39,13 @@ atom2mass = {
 }
 aa2formula['C'] = {'C': 5, 'H': 10, 'N': 2, 'O': 3, 'S': 1}
 
-def calculate_mass(seq):
+def calculate_mass(seq, charge = None):
     mass = 0
     for aa in re.findall(r'\W..\W|[A-Z][a-z]?', seq):
         for atom, number_atoms in aa2formula[aa].items():
             mass += atom2mass[atom]*number_atoms
     aa_number = len(re.findall(r'[A-Z][a-z]?', seq))
     mass -= (aa_number-1)*(2*atom2mass['H'] + atom2mass['O'])
+    if charge is not None:#Calculate m/z
+        mass = (mass + charge)/charge
     return mass 
