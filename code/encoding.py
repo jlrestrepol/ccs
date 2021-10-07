@@ -29,14 +29,13 @@ def fit_encoder(data):
     return label_encoder
 
 
-def int_dataset(dat, timesteps, middle = False):
+def int_dataset(dat, timesteps, middle = True):
     """Returns matrix len(data) x timesteps, each entry is the aminoacid that goes in that position. Fixed Lenght = timesteps = 66.
        Shorter sequences are paded with '_' (encoded as 22)
     
     """
     empty_entry = 22
     oh_dat = (np.ones([len(dat), timesteps + 1, 1], dtype=np.int32)*empty_entry).astype(np.int32)
-
     cnt = 0
     for _, row in dat.iterrows():
         ie = np.array(row['encseq'])
@@ -45,7 +44,7 @@ def int_dataset(dat, timesteps, middle = False):
             oh_dat[cnt, ((60-oe.shape[0])//2): ((60-oe.shape[0])//2)+oe.shape[0], :] = oe
         else:
             oh_dat[cnt, 0:oe.shape[0], :] = oe
-        oh_dat[cnt, -1, 0] = row['Charge']
+        #oh_dat[cnt, -1, 0] = row['Charge']
         cnt += 1
 
     return oh_dat
@@ -62,6 +61,9 @@ df = pd.read_csv('../dl_paper/SourceData_Figure_1.csv').loc[:,['Modified sequenc
 data = df['Modified sequence']
 label_encoder = fit_encoder(data)
 pp_data = prepare_data(df, label_encoder)
-oh = int_dataset(pp_data, model_params['timesteps'], model_params['num_input'])
+oh = int_dataset(pp_data, model_params['timesteps'], middle = False)
+oh = oh[:,:,0]
+oh
 #%%
-np.save('../Data/encoded.out', oh, allow_pickle=True)
+np.save('../Data/encoded_fig1', oh, allow_pickle=True)
+# %%
