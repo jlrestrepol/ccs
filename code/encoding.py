@@ -44,7 +44,7 @@ def int_dataset(dat, timesteps, middle = True):
             oh_dat[cnt, ((60-oe.shape[0])//2): ((60-oe.shape[0])//2)+oe.shape[0], :] = oe
         else:
             oh_dat[cnt, 0:oe.shape[0], :] = oe
-        #oh_dat[cnt, -1, 0] = row['Charge']
+        oh_dat[cnt, -1, 0] = row['Charge']
         cnt += 1
 
     return oh_dat
@@ -56,29 +56,38 @@ model_params = {"lab_name": "label", "fname": "cache/one_dat_cache_full_label.np
  "training_steps": 55000, "reduce_lr_step": 50000, "train_file": "data_final/Tests/200206_ward_min2_PTtest/2_train.pkl",
   "test_file": "data_final/Tests/200206_ward_min2_PTtest/2_test.pkl", "reduce_train": 0.5, 
   "scaling_dict": {"0": [275.41885375976557, 1118.7861328125]}}
+
 #%%
+########### Encode Sequence #############
 df = pd.read_csv('../dl_paper/SourceData_Figure_1.csv').loc[:,['Modified sequence', 'Charge']]
 data = df['Modified sequence']
 label_encoder = fit_encoder(data)
-#%
 pp_data = prepare_data(df, label_encoder)
-oh = int_dataset(pp_data, model_params['timesteps'], middle = False)
-oh = oh[:,:,0]
-oh
+encoded = int_dataset(pp_data, model_params['timesteps'], middle = False)
+encoded = encoded[:,:,0]
+encoded
 #%%
-np.save('../Data/encoded_fig1', oh, allow_pickle=True)
+np.save('../Data/encoded_fig1', encoded, allow_pickle=True)
 # %%
 ############## Check That the encoding worked correctly ###########
 #Fig1
-oh = np.load('../Data/encoded_fig1.npy')
-decoded = ["".join(label_encoder.inverse_transform(e)) for e in oh]
+#encoded = np.load('../Data/encoded_fig1.npy')[:,:-1]
+decoded = ["".join(label_encoder.inverse_transform(e)) for e in encoded]
 decoded = [e[:e.find('_')] for e in decoded]
 f"Was the reconstruction perfect? {np.array_equal(df['Modified sequence'].str.replace('_','').to_list(), decoded)}"
 # %%
 #Fig4
 df4 = pd.read_csv('../dl_paper/SourceData_Figure_4.csv')
-oh = np.load('../Data/encoded_fig4.npy')
-decoded = ["".join(label_encoder.inverse_transform(e)) for e in oh]
+encoded = np.load('../Data/encoded_fig4.npy')
+decoded = ["".join(label_encoder.inverse_transform(e)) for e in encoded]
 decoded = [e[:e.find('_')] for e in decoded]
 f"Was the reconstruction perfect? {np.array_equal(df4['Modified_sequence'].str.replace('_','').to_list(), decoded)}"
+############### Transform to one-hot-encoded ###################
 # %%
+encoded = np.load('../Data/encoded_fig1.npy')
+oh_encoder = sk_pp.OneHotEncoder(sparse = False, categories = 'auto')
+ohe = oh_encoder.fit_transform(encoded[:,:-1])
+ohe = np.append(ohe, encoded[:,-1].reshape(-1,1), axis = 1)
+# %%
+np.save('../Data/one_hot_encoded_fig1', ohe, allow_pickle=True)
+#%%
