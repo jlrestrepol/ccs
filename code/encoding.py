@@ -60,10 +60,25 @@ model_params = {"lab_name": "label", "fname": "cache/one_dat_cache_full_label.np
 df = pd.read_csv('../dl_paper/SourceData_Figure_1.csv').loc[:,['Modified sequence', 'Charge']]
 data = df['Modified sequence']
 label_encoder = fit_encoder(data)
+#%
 pp_data = prepare_data(df, label_encoder)
 oh = int_dataset(pp_data, model_params['timesteps'], middle = False)
 oh = oh[:,:,0]
 oh
 #%%
 np.save('../Data/encoded_fig1', oh, allow_pickle=True)
+# %%
+############## Check That the encoding worked correctly ###########
+#Fig1
+oh = np.load('../Data/encoded_fig1.npy')
+decoded = ["".join(label_encoder.inverse_transform(e)) for e in oh]
+decoded = [e[:e.find('_')] for e in decoded]
+f"Was the reconstruction perfect? {np.array_equal(df['Modified sequence'].str.replace('_','').to_list(), decoded)}"
+# %%
+#Fig4
+df4 = pd.read_csv('../dl_paper/SourceData_Figure_4.csv')
+oh = np.load('../Data/encoded_fig4.npy')
+decoded = ["".join(label_encoder.inverse_transform(e)) for e in oh]
+decoded = [e[:e.find('_')] for e in decoded]
+f"Was the reconstruction perfect? {np.array_equal(df4['Modified_sequence'].str.replace('_','').to_list(), decoded)}"
 # %%
