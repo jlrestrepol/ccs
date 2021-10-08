@@ -57,17 +57,24 @@ model_params = {"lab_name": "label", "fname": "cache/one_dat_cache_full_label.np
   "test_file": "data_final/Tests/200206_ward_min2_PTtest/2_test.pkl", "reduce_train": 0.5, 
   "scaling_dict": {"0": [275.41885375976557, 1118.7861328125]}}
 
+
+
 #%%
 ########### Encode Sequence #############
 df = pd.read_csv('../dl_paper/SourceData_Figure_1.csv').loc[:,['Modified sequence', 'Charge']]
 data = df['Modified sequence']
 label_encoder = fit_encoder(data)
+#%%
 pp_data = prepare_data(df, label_encoder)
 encoded = int_dataset(pp_data, model_params['timesteps'], middle = False)
 encoded = encoded[:,:,0]
 encoded
 #%%
 np.save('../Data/encoded_fig1', encoded, allow_pickle=True)
+
+
+
+
 # %%
 ############## Check That the encoding worked correctly ###########
 #Fig1
@@ -82,12 +89,20 @@ encoded = np.load('../Data/encoded_fig4.npy')
 decoded = ["".join(label_encoder.inverse_transform(e)) for e in encoded]
 decoded = [e[:e.find('_')] for e in decoded]
 f"Was the reconstruction perfect? {np.array_equal(df4['Modified_sequence'].str.replace('_','').to_list(), decoded)}"
+
+
+
+
+
 ############### Transform to one-hot-encoded ###################
 # %%
-encoded = np.load('../Data/encoded_fig1.npy')
+encoded_fig1 = np.load('../Data/encoded_fig1.npy')
+encoded_fig4 = np.load('../Data/encoded_fig4.npy')
 oh_encoder = sk_pp.OneHotEncoder(sparse = False, categories = 'auto')
-ohe = oh_encoder.fit_transform(encoded[:,:-1])
+oh_encoder.fit(encoded_fig1[:,:-1])
+#%%
+ohe = oh_encoder.transform(encoded[:,:-1])
+ohe = np.int8(ohe)
 ohe = np.append(ohe, encoded[:,-1].reshape(-1,1), axis = 1)
-# %%
-np.save('../Data/one_hot_encoded_fig1', ohe, allow_pickle=True)
+np.save('../Data/one_hot_encoded_fig4', ohe, allow_pickle=True)
 #%%
