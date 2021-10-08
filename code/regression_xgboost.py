@@ -100,7 +100,7 @@ features_fig4 = np.load('../Data/one_hot_encoded_fig4.npy')
 #%%
 
 ##### Separated by charge
-charge = 2
+charge = 3
 res  = xgb_best_bay.predict(features_fig4[features_fig4[:,-1] == charge])
 pred_ccs = df_fig4[df_fig4['Charge']==charge]['predicted_ccs'] + res
 
@@ -120,13 +120,21 @@ ax[1].legend(loc = 'lower right')
 # %%
 
 ##### Complete test set
-df_fig4['xgboost'] = xgb_best_bay.predict(features_fig4) + df_fig4['predicted_ccs']
+
+xgb_ch2 = joblib.load('best_xgb_ch2')
+xgb_ch3 = joblib.load('best_xgb_ch3')
+xgb_ch4 = joblib.load('best_xgb_ch4')
+
+df_fig4['xgboost'] = 0
+df_fig4.loc[df_fig4['Charge']==2,'xgboost'] = xgb_ch2.predict(features_fig4[features_fig4[:,-1]==2]) + df_fig4.loc[df_fig4['Charge']==2,'CCS']
+df_fig4.loc[df_fig4['Charge']==3,'xgboost'] = xgb_ch3.predict(features_fig4[features_fig4[:,-1]==3]) + df_fig4.loc[df_fig4['Charge']==3,'CCS']
+df_fig4.loc[df_fig4['Charge']==4,'xgboost'] = xgb_ch4.predict(features_fig4[features_fig4[:,-1]==4]) + df_fig4.loc[df_fig4['Charge']==4,'CCS']
 
 fig, ax = plt.subplots(nrows = 1, ncols = 2, figsize = (20, 6))
 ax[0].hist((df_fig4['CCS']-df_fig4['xgboost'])/df_fig4['xgboost']*100, bins = 50)
-ax[0].set_xlabel('Relative Error of total prediction')
+ax[0].set_xlabel('Relative Error of CCS')
 ax[0].set_ylabel('Counts')
-ax[0].set_title('Relative error of residual w.r.t Ground Truth')
+ax[0].set_title('Relative error of CCS w.r.t Ground Truth')
 
 corr, _ = scipy.stats.pearsonr(df_fig4['xgboost'],df_fig4['CCS'])
 ax[1].scatter(df_fig4['CCS'], df_fig4['xgboost'], label = f'Corr : {np.round(corr, 3)}', s = 0.1)
