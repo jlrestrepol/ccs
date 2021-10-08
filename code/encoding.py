@@ -5,7 +5,7 @@ import sklearn.preprocessing as sk_pp
 
 # %%
 def prepare_data(df, encoder, inplace = False):
-    """Prepares the given csv file and saves it as pickle"""
+    """Prepares the data and econdes it"""
     if not inplace:
         df_cp = df.copy()
     df_cp = df.rename(index=str, columns={"Modified sequence": "Modified_sequence"})
@@ -98,11 +98,11 @@ f"Was the reconstruction perfect? {np.array_equal(df4['Modified_sequence'].str.r
 # %%
 encoded_fig1 = np.load('../Data/encoded_fig1.npy')
 encoded_fig4 = np.load('../Data/encoded_fig4.npy')
-oh_encoder = sk_pp.OneHotEncoder(sparse = False, categories = 'auto')
-oh_encoder.fit(encoded_fig1[:,:-1])
+oh_encoder = sk_pp.OneHotEncoder(sparse = False, categories = [np.arange(27)]*66, dtype=np.int8)
+oh_encoder.fit(encoded_fig4[:,:-1])
+ohe = oh_encoder.transform(encoded_fig4[:,:-1])
+ohe = np.append(ohe, encoded_fig4[:,-1].reshape(-1,1), axis = 1)
 #%%
-ohe = oh_encoder.transform(encoded[:,:-1])
-ohe = np.int8(ohe)
-ohe = np.append(ohe, encoded[:,-1].reshape(-1,1), axis = 1)
 np.save('../Data/one_hot_encoded_fig4', ohe, allow_pickle=True)
-#%%
+
+# %%
