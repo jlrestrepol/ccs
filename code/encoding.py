@@ -24,7 +24,7 @@ def fit_encoder(data):
     data = [list(d) for d in data]#Create a nested list: list(str) -> [[char] for char in str]
     flat_list = ['_'] + [item for sublist in data for item in sublist]#flattens nested list
     values = np.array(flat_list)#initialize np array
-    label_encoder = sk_pp.LabelEncoder()#initialize label encoder
+    label_encoder = sk_pp.LabelEncoder()#Try OrdinalEncoder()
     label_encoder.fit(values)#fit encoder
     return label_encoder
 
