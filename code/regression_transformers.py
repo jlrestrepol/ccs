@@ -110,7 +110,7 @@ def diagnostic_plot(history):
     plt.xlabel('epoch')
     plt.legend(['train', 'val'], loc='upper left')
 
-def test_set():
+def test_set_results():
     '''Plots in the test set: scatter and histogram'''
     ### Load-in model and Data
     df_fig4 = pd.read_pickle('../Data/Fig4_powerlaw.pkl')
@@ -135,23 +135,20 @@ def test_set():
     ax[1].set_title('Scatter Plot CCS vs predicted CCS, Charge 2')
     ax[1].plot(np.arange(300,600), np.arange(300,600), 'b--')
     ax[1].legend()
-#%%
-def main():
-    ############### Load in data and calculate error ####################
-    fig1 = pd.read_pickle('../Data/Fig1_powerlaw.pkl')
-    features_complete = np.load('../Data/one_hot_encoded_fig1.npy')
-    label_complete = (fig1['CCS'] - fig1['predicted_ccs']).values
-    charge = 2
-    features = features_complete[features_complete[:,-1] == charge][:,:-1]#drop charge, 2 heads
-    label = label_complete[features_complete[:,-1] == charge]
-    x_train, x_test, y_train, y_test = model_selection.train_test_split(features, label, test_size = 0.1, random_state=42)
-    del features_complete
-    del label_complete
-    del features
-    del label
-    print(f"The Initial Mean Absolute Error is: {sk.metrics.mean_absolute_error(fig1['CCS'], fig1['predicted_ccs'])}")
 
-    ########### Predictor architecture ###########
+def train_val_set(charge = 2):
+    """Function that outputs train and validation set for a given charge state"""
+    fig1 = pd.read_pickle('../Data/Fig1_powerlaw.pkl')#loads in raw training data
+    features_complete = np.load('../Data/one_hot_encoded_fig1.npy')#load in one-hot-encoded training data
+    label_complete = (fig1['CCS'] - fig1['predicted_ccs']).values#residual
+    features = features_complete[features_complete[:,-1] == charge][:,:-1]#choose points with given charge, drop charge feature because of 2 heads
+    label = label_complete[features_complete[:,-1] == charge]#choose appropiate residuals
+    x_train, x_test, y_train, y_test = model_selection.train_test_split(features, label, test_size = 0.1, random_state=42)#train/val set split
+    print(f"The Initial Mean Absolute Error is: {sk.metrics.mean_absolute_error(fig1['CCS'], fig1['predicted_ccs'])}")#prints initial error
+    return x_train, x_test, y_train, y_test
+
+def architecutre(x_train):
+    """Architecture of the predictor"""
     embed_dim = x_train.shape[1]  # Embedding size for each token
     num_heads = 2  # Number of attention heads
     ff_dim = 32  # Hidden layer size in feed forward network inside transformer
@@ -166,12 +163,21 @@ def main():
     outputs = layers.Dense(1)(x)
 
     model = keras.Model(inputs=inputs, outputs=outputs)
-    ############## Format input and fit model #############
+    return model
+
+#%%
+def main():
+    charge = 2
+    x_train, x_test, y_train, y_test = train_val_set()
     X_train_tensor = np.asarray(x_train)
     y_train_tensor = np.asarray(y_train)
-
     X_test_tensor = np.asarray(x_test)
     y_test_tensor = np.asarray(y_test)
+
+    model = architecutre(x_train)
+   
+    ############## Format input and fit model #############
+
     folder = f'../models/transformer_ch{charge}/'
     callbacks = [tf.keras.callbacks.CSVLogger(folder+'training.log', append=True),  
                 tf.keras.callbacks.ModelCheckpoint(folder+'checkpoints/checkpoint{epoch:02d}', save_freq=5509*5)] 
