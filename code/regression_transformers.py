@@ -98,87 +98,95 @@ class TokenAndPositionEmbedding(layers.Layer):
         positions = self.pos_emb(positions)
         x = self.token_emb(x)
         return x + positions
-# %%
-############### Load in data and calculate error ####################
-fig1 = pd.read_pickle('../Data/Fig1_powerlaw.pkl')
-features_complete = np.load('../Data/one_hot_encoded_fig1.npy')
-label_complete = (fig1['CCS'] - fig1['predicted_ccs']).values
-charge = 2
-features = features_complete[features_complete[:,-1] == charge][:,:-1]#drop charge
-label = label_complete[features_complete[:,-1] == charge]
-x_train, x_test, y_train, y_test = model_selection.train_test_split(features, label, test_size = 0.1, random_state=42)
-print(f"The Initial Mean Absolute Error is: {sk.metrics.mean_absolute_error(fig1['CCS'], fig1['predicted_ccs'])}")
 
 # %%
-########### Predictor architecture ###########
-embed_dim = x_train.shape[1]  # Embedding size for each token
-num_heads = 2  # Number of attention heads
-ff_dim = 32  # Hidden layer size in feed forward network inside transformer
 
-inputs = layers.Input(shape=(embed_dim,))
-transformer_block = TransformerBlock(embed_dim, num_heads, ff_dim)
-x = transformer_block(inputs)
-x = layers.GlobalAveragePooling1D()(x)
-x = layers.Dropout(0.1)(x)
-x = layers.Dense(20, activation="relu")(x)
-x = layers.Dropout(0.1)(x)
-outputs = layers.Dense(1)(x)
+def diagnostic_plot(history):
+    '''Diagnostic plots of the DL model'''
+    plt.plot(history.history['loss'])
+    plt.plot(history.history['val_loss'])
+    plt.title('model accuracy')
+    plt.ylabel('loss')
+    plt.xlabel('epoch')
+    plt.legend(['train', 'val'], loc='upper left')
 
-model = keras.Model(inputs=inputs, outputs=outputs)
-# %%
-############## Format input and fit model #############
-X_train_tensor = np.asarray(x_train)
-y_train_tensor = np.asarray(y_train)
+def test_set():
+    '''Plots in the test set: scatter and histogram'''
+    ### Load-in model and Data
+    df_fig4 = pd.read_pickle('../Data/Fig4_powerlaw.pkl')
+    features_fig4 = np.load('../Data/one_hot_encoded_fig4.npy')
+    model = tf.keras.models.load_model('../models/transformer_ch2')
+    ### Separate by charge and make predictions, change after all the models are trained
+    charge = 2
+    res  = model.predict(features_fig4[features_fig4[:,-1] == charge][:,:-1])
+    pred_ccs = df_fig4[df_fig4['Charge']==charge]['predicted_ccs'] + res.flatten()
 
-X_test_tensor = np.asarray(x_test)
-y_test_tensor = np.asarray(y_test)
+    ### Histogram and scatter plot
+    fig, ax = plt.subplots(nrows = 1, ncols = 2, figsize = (20, 6))
+    ax[0].hist((df_fig4[df_fig4['Charge']==charge]['CCS']-pred_ccs)/pred_ccs*100, bins = 50)
+    ax[0].set_xlabel('Relative Error of CCS')
+    ax[0].set_ylabel('Counts')
+    ax[0].set_title('Relative error of CCS w.r.t Ground Truth, Charge 2')
+
+    corr, _ = scipy.stats.pearsonr(df_fig4[df_fig4['Charge']==charge]['CCS'],pred_ccs)
+    ax[1].scatter(df_fig4[df_fig4['Charge']==charge]['CCS'],pred_ccs, label = f'Corr : {np.round(corr, 3)}', s = 0.1)
+    ax[1].set_xlabel('CCS')
+    ax[1].set_ylabel('Predicted CCS')
+    ax[1].set_title('Scatter Plot CCS vs predicted CCS, Charge 2')
+    ax[1].plot(np.arange(300,600), np.arange(300,600), 'b--')
+    ax[1].legend()
+#%%
+def main():
+    ############### Load in data and calculate error ####################
+    fig1 = pd.read_pickle('../Data/Fig1_powerlaw.pkl')
+    features_complete = np.load('../Data/one_hot_encoded_fig1.npy')
+    label_complete = (fig1['CCS'] - fig1['predicted_ccs']).values
+    charge = 2
+    features = features_complete[features_complete[:,-1] == charge][:,:-1]#drop charge, 2 heads
+    label = label_complete[features_complete[:,-1] == charge]
+    x_train, x_test, y_train, y_test = model_selection.train_test_split(features, label, test_size = 0.1, random_state=42)
+    del features_complete
+    del label_complete
+    del features
+    del label
+    print(f"The Initial Mean Absolute Error is: {sk.metrics.mean_absolute_error(fig1['CCS'], fig1['predicted_ccs'])}")
+
+    ########### Predictor architecture ###########
+    embed_dim = x_train.shape[1]  # Embedding size for each token
+    num_heads = 2  # Number of attention heads
+    ff_dim = 32  # Hidden layer size in feed forward network inside transformer
+
+    inputs = layers.Input(shape=(embed_dim,))
+    transformer_block = TransformerBlock(embed_dim, num_heads, ff_dim)
+    x = transformer_block(inputs)
+    x = layers.GlobalAveragePooling1D()(x)
+    x = layers.Dropout(0.1)(x)
+    x = layers.Dense(20, activation="relu")(x)
+    x = layers.Dropout(0.1)(x)
+    outputs = layers.Dense(1)(x)
+
+    model = keras.Model(inputs=inputs, outputs=outputs)
+    ############## Format input and fit model #############
+    X_train_tensor = np.asarray(x_train)
+    y_train_tensor = np.asarray(y_train)
+
+    X_test_tensor = np.asarray(x_test)
+    y_test_tensor = np.asarray(y_test)
+    folder = f'../models/transformer_ch{charge}/'
+    callbacks = [tf.keras.callbacks.CSVLogger(folder+'training.log', append=True),  
+                tf.keras.callbacks.ModelCheckpoint(folder+'checkpoints/checkpoint{epoch:02d}', save_freq=5509*5)] 
+
+    print(len(X_train_tensor), "Training data")
+    print(len(X_test_tensor), "Test data")
+
+    model.compile(loss='mean_squared_error', optimizer='adam')
+    history = model.fit(
+        X_train_tensor, y_train_tensor, batch_size=64, epochs=30, validation_data=(X_test_tensor, y_test_tensor), callbacks=callbacks
+    )
+    #!mkdir -p ../models/transformer_ch2 #create folder if doesnt exist
+    model.save('../models/transformer_ch2')
+    np.save('../models/history_tr2.npy',history.history)
 
 #%%
-print(len(X_train_tensor), "Training data")
-print(len(X_test_tensor), "Test data")
-
-model.compile(loss='mean_squared_error', optimizer='adam')
-history = model.fit(
-    X_train_tensor, y_train_tensor, batch_size=64, epochs=15, validation_data=(X_test_tensor, y_test_tensor)
-)
-#%%
-######### Diagnostic plots ###########
-plt.plot(history.history['loss'])
-plt.plot(history.history['val_loss'])
-plt.title('model accuracy')
-plt.ylabel('loss')
-plt.xlabel('epoch')
-plt.legend(['train', 'val'], loc='upper left')
-# %%
-############## Load-in or save model ############
-
-#!mkdir -p ../models/transformer_ch2 #create folder if doesnt exist
-model.save('../models/transformer_ch2')
-
-
-
-#model = tf.keras.models.load_model('transformer')
-# %%
-############ Test Set Results ############
-df_fig4 = pd.read_pickle('../Data/Fig4_powerlaw.pkl')
-features_fig4 = np.load('../Data/one_hot_encoded_fig4.npy')
-
-##### Separated by charge
-charge = 2
-res  = model.predict(features_fig4[features_fig4[:,-1] == charge][:,:-1])
-pred_ccs = df_fig4[df_fig4['Charge']==charge]['predicted_ccs'] + res.flatten()
-# %%
-fig, ax = plt.subplots(nrows = 1, ncols = 2, figsize = (20, 6))
-ax[0].hist((df_fig4[df_fig4['Charge']==charge]['CCS']-pred_ccs)/pred_ccs*100, bins = 50)
-ax[0].set_xlabel('Relative Error of CCS')
-ax[0].set_ylabel('Counts')
-ax[0].set_title('Relative error of CCS w.r.t Ground Truth, Charge 2')
-
-corr, _ = scipy.stats.pearsonr(df_fig4[df_fig4['Charge']==charge]['CCS'],pred_ccs)
-ax[1].scatter(df_fig4[df_fig4['Charge']==charge]['CCS'],pred_ccs, label = f'Corr : {np.round(corr, 3)}', s = 0.1)
-ax[1].set_xlabel('CCS')
-ax[1].set_ylabel('Predicted CCS')
-ax[1].set_title('Scatter Plot CCS vs predicted CCS, Charge 2')
-ax[1].plot(np.arange(300,600), np.arange(300,600), 'b--')
-ax[1].legend()
-# %%
+if __name__ == "__main__":
+    main()
