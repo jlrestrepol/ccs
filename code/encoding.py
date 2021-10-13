@@ -64,7 +64,6 @@ model_params = {"lab_name": "label", "fname": "cache/one_dat_cache_full_label.np
 df = pd.read_csv('../dl_paper/SourceData_Figure_1.csv').loc[:,['Modified sequence', 'Charge']]
 data = df['Modified sequence']
 label_encoder = fit_encoder(data)
-#%%
 pp_data = prepare_data(df, label_encoder)
 encoded = int_dataset(pp_data, model_params['timesteps'], middle = False)
 encoded = encoded[:,:,0]
@@ -104,5 +103,16 @@ ohe = oh_encoder.transform(encoded_fig4[:,:-1])
 ohe = np.append(ohe, encoded_fig4[:,-1].reshape(-1,1), axis = 1)
 #%%
 np.save('../Data/one_hot_encoded_fig4', ohe, allow_pickle=True)
+
+# %%
+############ Transfor to Count Matrix ##############
+encoded_fig1 = np.load('../Data/encoded_fig4.npy')
+counts_matrix = np.zeros((encoded_fig1.shape[0], 27), dtype=np.int8)
+for i, row in enumerate(encoded_fig1):
+    index, counts = np.unique(row[:-1], return_counts=True)
+    counts_matrix[i, index] = counts
+counts_matrix = np.append(counts_matrix, encoded_fig1[:,-1].reshape(-1,1), axis = 1)
+# %%
+np.save('../Data/counts_fig4', counts_matrix, allow_pickle=True)
 
 # %%
