@@ -2,6 +2,7 @@
 import numpy as np
 import pandas as pd
 import sklearn.preprocessing as sk_pp
+from sklearn.feature_extraction.text import CountVectorizer
 
 # %%
 def prepare_data(df, encoder, inplace = False):
@@ -116,3 +117,16 @@ counts_matrix = np.append(counts_matrix, encoded_fig1[:,-1].reshape(-1,1), axis 
 np.save('../Data/counts_fig4', counts_matrix, allow_pickle=True)
 
 # %%
+########## Dipeptides
+df = pd.read_csv('../dl_paper/SourceData_Figure_4.csv').loc[:,['Modified_sequence', 'Charge']]
+seqs = df['Modified_sequence'].str.replace('_','')
+aa = ['(', ')', 'A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M','N', 'P', 'Q', 'R', 'S', 
+'T', 'V', 'W', 'Y', 'a', 'c', 'o','x']
+voc = [l2+l1 for l1 in aa for l2 in aa]
+vectorizer = CountVectorizer(lowercase=False, ngram_range = (2,2), analyzer='char', 
+vocabulary=voc, dtype = np.int8)
+X = vectorizer.fit_transform(seqs).todense()
+dipeptides = pd.DataFrame(X)
+dipeptides['Charge'] = df['Charge']
+# %%
+dipeptides.to_pickle('../Data/dipeptide_fig4.pkl')
