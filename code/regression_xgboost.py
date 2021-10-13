@@ -10,27 +10,6 @@ import seaborn as sns
 import joblib
 
 # %%
-############### Load in data and calculate error ####################
-fig1 = pd.read_pickle('../Data/Fig1_powerlaw.pkl')
-features_complete = np.load('../Data/one_hot_encoded_fig1.npy')
-label_complete = (fig1['CCS'] - fig1['predicted_ccs']).values
-
-charge = 3
-
-features_ch2 = features_complete[features_complete[:,-1] == charge]
-label_ch2 = label_complete[features_complete[:,-1] == charge]
-
-#subsample
-idx = np.random.choice(features_ch2.shape[0], 100000, replace = False)
-features = features_ch2[idx]
-label = label_ch2[idx]
-#train/test set
-x_train, x_test, y_train, y_test = sk.model_selection.train_test_split(features, label, test_size = 0.1, random_state=42)
-print(f"The Initial Mean Absolute Error is: {sk.metrics.mean_absolute_error(fig1['CCS'], fig1['predicted_ccs'])}")
-
-
-
-# %%
 ############# Obtimization routine #######################
 def objective(space):
     """Function that will be optimized"""
@@ -46,12 +25,12 @@ def objective(space):
     regressor.fit(x_train, y_train)
     
     y_pred = regressor.predict(x_test)
-    mae = sk.metrics.mean_absolute_error(y_test, y_pred)
-    print ("Mean Absolute Error: ", mae)
+    mse = sk.metrics.mean_squared_error(y_test, y_pred)
+    print ("Mean Squared Error: ", mse)
     
-    return {'loss': mae, 'status': STATUS_OK, 'model': regressor}
+    return {'loss': mse, 'status': STATUS_OK, 'model': regressor}
 
-def optimize(n_trials = 20, save_model = False):
+def optimize(n_trials = 20, save_model = False, file_name = ""):
 
     """Runs Bayesian hyperparameter optimization on XGBoost"""
     space = {
@@ -75,73 +54,95 @@ def optimize(n_trials = 20, save_model = False):
     xgb_best_bay.fit(x_train, y_train)#Fit best
     
     if save_model:
-        joblib.dump(xgb_best_bay, 'best_xgb_ch3')#Saves the best model
+        joblib.dump(xgb_best_bay, file_name)#Saves the best model
     
     return xgb_best_bay
 
-
-
-
-
 # %%
-############# Load-in/find optimal model #################
-#xgb_best_bay = joblib.load('best_xgb')
-xgb_best_bay = optimize(n_trials=4, save_model=True)
-pred = xgb_best_bay.predict(x_test)
-print(f"The Mean Absolute Error is: {sk.metrics.mean_absolute_error(y_test, pred)}")#Print error of best model
+
+def test_set_one_charge_results(charge):
+    '''Plots results on the test set'''
+    df_fig4 = pd.read_pickle('../Data/Fig4_powerlaw.pkl')
+    features_fig4 = np.load('../Data/one_hot_encoded_fig4.npy')
+    
+    xgb_best_bay = joblib.load(f'xgb_counts_ch{charge}')
+
+    ##### Separated by charge
+    res  = xgb_best_bay.predict(features_fig4[features_fig4[:,-1] == charge])
+    pred_ccs = df_fig4[df_fig4['Charge']==charge]['predicted_ccs'] + res
+
+    fig, ax = plt.subplots(nrows = 1, ncols = 2, figsize = (20, 6))
+    ax[0].hist((df_fig4[df_fig4['Charge']==charge]['predicted_ccs']-pred_ccs)/pred_ccs*100, bins = 50)
+    ax[0].set_xlabel('Relative Error of residual')
+    ax[0].set_ylabel('Counts')
+    ax[0].set_title('Relative error of residual w.r.t Ground Truth - Charge 2')
+
+    corr, _ = scipy.stats.pearsonr(df_fig4[df_fig4['Charge']==charge]['predicted_ccs'],pred_ccs)
+    ax[1].scatter(df_fig4[df_fig4['Charge']==charge]['predicted_ccs'], pred_ccs, label = f'Corr : {np.round(corr, 3)}', s = 0.1)
+    ax[1].set_xlabel('Residual')
+    ax[1].set_ylabel('Predicted Residual')
+    ax[1].set_title('Scatter Plot Residual vs predicted Residual')
+    ax[1].plot(np.arange(300,600), np.arange(300,600), 'b--')
+    ax[1].legend(loc = 'lower right')
+
+def test_set_results():
+    '''Results on the complete test set'''
+
+    xgb_ch2 = joblib.load('xgb_counts_ch2')
+    xgb_ch3 = joblib.load('xgb_counts_ch3')
+    xgb_ch4 = joblib.load('xgb_counts_ch4')
+
+    df_fig4 = pd.read_pickle('../Data/Fig4_powerlaw.pkl')
+    features_fig4 = np.load('../Data/counts_fig4.npy')
+
+    df_fig4['xgboost'] = 0
+    df_fig4.loc[df_fig4['Charge']==2,'xgboost'] = xgb_ch2.predict(features_fig4[features_fig4[:,-1]==2]) + df_fig4.loc[df_fig4['Charge']==2,'CCS']
+    df_fig4.loc[df_fig4['Charge']==3,'xgboost'] = xgb_ch3.predict(features_fig4[features_fig4[:,-1]==3]) + df_fig4.loc[df_fig4['Charge']==3,'CCS']
+    df_fig4.loc[df_fig4['Charge']==4,'xgboost'] = xgb_ch4.predict(features_fig4[features_fig4[:,-1]==4]) + df_fig4.loc[df_fig4['Charge']==4,'CCS']
+
+    fig, ax = plt.subplots(nrows = 1, ncols = 2, figsize = (20, 6))
+    ax[0].hist((df_fig4['CCS']-df_fig4['xgboost'])/df_fig4['xgboost']*100, bins = 50)
+    ax[0].set_xlabel('Relative Error of CCS')
+    ax[0].set_ylabel('Counts')
+    ax[0].set_title('Relative error of CCS w.r.t Ground Truth')
+
+    corr, _ = scipy.stats.pearsonr(df_fig4['xgboost'],df_fig4['CCS'])
+    ax[1].scatter(df_fig4['CCS'], df_fig4['xgboost'], label = f'Corr : {np.round(corr, 4)}', s = 0.1)
+    ax[1].set_xlabel('CCS')
+    ax[1].set_ylabel('Predicted CCS')
+    ax[1].set_title('Scatter Plot CCS vs predicted CCS')
+    ax[1].plot(np.arange(300,800), np.arange(300,800), 'b--')
+    ax[1].legend()
 
 
-
-
-# %%
-############ Test Set Results ###############
-df_fig4 = pd.read_pickle('../Data/Fig4_powerlaw.pkl')
-features_fig4 = np.load('../Data/one_hot_encoded_fig4.npy')
 #%%
+def main():
 
-##### Separated by charge
-charge = 3
-res  = xgb_best_bay.predict(features_fig4[features_fig4[:,-1] == charge])
-pred_ccs = df_fig4[df_fig4['Charge']==charge]['predicted_ccs'] + res
+    ############### Load in data and calculate error ####################
+    fig1 = pd.read_pickle('../Data/Fig1_powerlaw.pkl')
+    features_complete = np.load('../Data/counts_fig1.npy')
+    label_complete = (fig1['CCS'] - fig1['predicted_ccs']).values
 
-fig, ax = plt.subplots(nrows = 1, ncols = 2, figsize = (20, 6))
-ax[0].hist((df_fig4[df_fig4['Charge']==charge]['predicted_ccs']-pred_ccs)/pred_ccs*100, bins = 50)
-ax[0].set_xlabel('Relative Error of residual')
-ax[0].set_ylabel('Counts')
-ax[0].set_title('Relative error of residual w.r.t Ground Truth - Charge 2')
+    charge = 4
 
-corr, _ = scipy.stats.pearsonr(df_fig4[df_fig4['Charge']==charge]['predicted_ccs'],pred_ccs)
-ax[1].scatter(df_fig4[df_fig4['Charge']==charge]['predicted_ccs'], pred_ccs, label = f'Corr : {np.round(corr, 3)}', s = 0.1)
-ax[1].set_xlabel('Residual')
-ax[1].set_ylabel('Predicted Residual')
-ax[1].set_title('Scatter Plot Residual vs predicted Residual')
-ax[1].plot(np.arange(300,600), np.arange(300,600), 'b--')
-ax[1].legend(loc = 'lower right')
+    features_ch2 = features_complete[features_complete[:,-1] == charge]
+    label_ch2 = label_complete[features_complete[:,-1] == charge]
+    #subsample
+    idx = np.random.choice(features_ch2.shape[0], features_ch2.shape[0], replace = False)
+    features = features_ch2[idx]
+    label = label_ch2[idx]
+    #train/test set
+    global x_train, x_test, y_train, y_test
+    x_train, x_test, y_train, y_test = sk.model_selection.train_test_split(features, label, test_size = 0.1, random_state=42)
+    print(f"The Initial Mean Squared Error is: {sk.metrics.mean_squared_error(fig1['CCS'], fig1['predicted_ccs'])}")
+    
+    ############# Load-in/find optimal model #################
+    #xgb_best_bay = joblib.load('best_xgb')
+    xgb_best_bay = optimize(n_trials=20, save_model=True, file_name=f'xgb_counts_ch{charge}')
+    pred = xgb_best_bay.predict(x_test)
+    print(f"The Mean Squared Error is: {sk.metrics.mean_squared_error(y_test, pred)}")#Print error of best model
+    return xgb_best_bay
 # %%
-
-##### Complete test set
-
-xgb_ch2 = joblib.load('best_xgb_ch2')
-xgb_ch3 = joblib.load('best_xgb_ch3')
-xgb_ch4 = joblib.load('best_xgb_ch4')
-
-df_fig4['xgboost'] = 0
-df_fig4.loc[df_fig4['Charge']==2,'xgboost'] = xgb_ch2.predict(features_fig4[features_fig4[:,-1]==2]) + df_fig4.loc[df_fig4['Charge']==2,'CCS']
-df_fig4.loc[df_fig4['Charge']==3,'xgboost'] = xgb_ch3.predict(features_fig4[features_fig4[:,-1]==3]) + df_fig4.loc[df_fig4['Charge']==3,'CCS']
-df_fig4.loc[df_fig4['Charge']==4,'xgboost'] = xgb_ch4.predict(features_fig4[features_fig4[:,-1]==4]) + df_fig4.loc[df_fig4['Charge']==4,'CCS']
-
-fig, ax = plt.subplots(nrows = 1, ncols = 2, figsize = (20, 6))
-ax[0].hist((df_fig4['CCS']-df_fig4['xgboost'])/df_fig4['xgboost']*100, bins = 50)
-ax[0].set_xlabel('Relative Error of CCS')
-ax[0].set_ylabel('Counts')
-ax[0].set_title('Relative error of CCS w.r.t Ground Truth')
-
-corr, _ = scipy.stats.pearsonr(df_fig4['xgboost'],df_fig4['CCS'])
-ax[1].scatter(df_fig4['CCS'], df_fig4['xgboost'], label = f'Corr : {np.round(corr, 3)}', s = 0.1)
-ax[1].set_xlabel('CCS')
-ax[1].set_ylabel('Predicted CCS')
-ax[1].set_title('Scatter Plot CCS vs predicted CCS')
-ax[1].plot(np.arange(300,800), np.arange(300,800), 'b--')
-ax[1].legend()
-
+if __name__ == "__main__":
+    main()
 # %%
