@@ -9,7 +9,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import joblib
 
-# %%
 ############# Obtimization routine #######################
 def objective(space):
     """Function that will be optimized"""
@@ -58,7 +57,6 @@ def optimize(n_trials = 20, save_model = False, file_name = ""):
     
     return xgb_best_bay
 
-# %%
 
 def test_set_one_charge_results(charge):
     '''Plots results on the test set'''
@@ -115,8 +113,7 @@ def test_set_results():
     ax[1].legend()
 
 
-#%%
-def main():
+def bayessian_opt():
 
     ############### Load in data and calculate error ####################
     fig1 = pd.read_pickle('../Data/Fig1_powerlaw.pkl')
@@ -141,8 +138,7 @@ def main():
     xgb_best_bay = optimize(n_trials=20, save_model=True, file_name=f'xgb_counts_ch{charge}')
     pred = xgb_best_bay.predict(x_test)
     print(f"The Mean Squared Error is: {sk.metrics.mean_squared_error(y_test, pred)}")#Print error of best model
-    return xgb_best_bay
-# %%
+
 if __name__ == "__main__":
-    main()
-# %%
+    bayessian_opt()
+
