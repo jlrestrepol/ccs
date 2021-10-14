@@ -8,7 +8,8 @@ import sklearn as sk
 import matplotlib.pyplot as plt
 import seaborn as sns
 import joblib
-
+import sys
+#%%
 ############# Obtimization routine #######################
 def objective(space):
     """Function that will be optimized"""
@@ -86,12 +87,12 @@ def test_set_one_charge_results(charge):
 def test_set_results():
     '''Results on the complete test set'''
 
-    xgb_ch2 = joblib.load('xgb_counts_ch2')
-    xgb_ch3 = joblib.load('xgb_counts_ch3')
-    xgb_ch4 = joblib.load('xgb_counts_ch4')
+    xgb_ch2 = joblib.load('xgb_dipeptides_ch2')
+    xgb_ch3 = joblib.load('xgb_dipeptides_ch3')
+    xgb_ch4 = joblib.load('xgb_dipeptides_ch4')
 
     df_fig4 = pd.read_pickle('../Data/Fig4_powerlaw.pkl')
-    features_fig4 = np.load('../Data/counts_fig4.npy')
+    features_fig4 = pd.read_pickle('../Data/dipeptide_fig4.pkl').values
 
     df_fig4['xgboost'] = 0
     df_fig4.loc[df_fig4['Charge']==2,'xgboost'] = xgb_ch2.predict(features_fig4[features_fig4[:,-1]==2]) + df_fig4.loc[df_fig4['Charge']==2,'CCS']
@@ -113,32 +114,48 @@ def test_set_results():
     ax[1].legend()
 
 
-def bayessian_opt():
+def bayessian_opt(charge):
 
     ############### Load in data and calculate error ####################
     fig1 = pd.read_pickle('../Data/Fig1_powerlaw.pkl')
-    features_complete = np.load('../Data/counts_fig1.npy')
+    counts_aa = np.load('../Data/counts_fig1.npy', allow_pickle=True)
+    counts_dip = pd.read_pickle('../Data/dipeptide_fig1.pkl').values
+    features_complete = np.append(counts_aa[:,:-1], counts_dip, axis = 1)
     label_complete = (fig1['CCS'] - fig1['predicted_ccs']).values
-
-    charge = 4
-
+    
     features_ch2 = features_complete[features_complete[:,-1] == charge]
     label_ch2 = label_complete[features_complete[:,-1] == charge]
     #subsample
     idx = np.random.choice(features_ch2.shape[0], features_ch2.shape[0], replace = False)
     features = features_ch2[idx]
     label = label_ch2[idx]
+
+    del features_complete
+    del label_complete
+    del features_ch2
+    del label_ch2
     #train/test set
+    print(features.shape, label.shape)
     global x_train, x_test, y_train, y_test
     x_train, x_test, y_train, y_test = sk.model_selection.train_test_split(features, label, test_size = 0.1, random_state=42)
+    del features
+    del label
     print(f"The Initial Mean Squared Error is: {sk.metrics.mean_squared_error(fig1['CCS'], fig1['predicted_ccs'])}")
-    
+    del fig1
     ############# Load-in/find optimal model #################
     #xgb_best_bay = joblib.load('best_xgb')
-    xgb_best_bay = optimize(n_trials=20, save_model=True, file_name=f'xgb_counts_ch{charge}')
+    xgb_best_bay = optimize(n_trials=20, save_model=True, file_name=f'xgb_extended_ch{charge}')
     pred = xgb_best_bay.predict(x_test)
     print(f"The Mean Squared Error is: {sk.metrics.mean_squared_error(y_test, pred)}")#Print error of best model
+# %%
 
 if __name__ == "__main__":
-    bayessian_opt()
+    charge = 2
+    bayessian_opt(charge)
+    charge = 3
+    bayessian_opt(charge)
+    charge = 4
+    bayessian_opt(charge)
 
+
+np.append()
