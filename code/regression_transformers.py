@@ -9,6 +9,7 @@ import pandas as pd
 import sklearn as sk
 from sklearn import model_selection
 import scipy
+import sys
 
 #%%
 class MultiHeadSelfAttention(layers.Layer):
@@ -101,23 +102,23 @@ class TokenAndPositionEmbedding(layers.Layer):
 
 # %%
 
-def diagnostic_plot(history):
+def diagnostic_plot(file_path):
     '''Diagnostic plots of the DL model'''
-    plt.plot(history.history['loss'])
-    plt.plot(history.history['val_loss'])
+    data = pd.read_csv(file_path)
+    plt.plot(data['loss'])
+    plt.plot(data['val_loss'])
     plt.title('model accuracy')
     plt.ylabel('loss')
     plt.xlabel('epoch')
     plt.legend(['train', 'val'], loc='upper left')
 
-def test_set_results():
+def test_set_results(charge = 2):
     '''Plots in the test set: scatter and histogram'''
     ### Load-in model and Data
     df_fig4 = pd.read_pickle('../Data/Fig4_powerlaw.pkl')
     features_fig4 = np.load('../Data/one_hot_encoded_fig4.npy')
     model = tf.keras.models.load_model('../models/transformer_ch2')
     ### Separate by charge and make predictions, change after all the models are trained
-    charge = 2
     res  = model.predict(features_fig4[features_fig4[:,-1] == charge][:,:-1])
     pred_ccs = df_fig4[df_fig4['Charge']==charge]['predicted_ccs'] + res.flatten()
 
@@ -136,7 +137,7 @@ def test_set_results():
     ax[1].plot(np.arange(300,600), np.arange(300,600), 'b--')
     ax[1].legend()
 
-def train_val_set(charge = 2):
+def train_val_set(charge = np.nan):
     """Function that outputs train and validation set for a given charge state"""
     fig1 = pd.read_pickle('../Data/Fig1_powerlaw.pkl')#loads in raw training data
     features_complete = np.load('../Data/one_hot_encoded_fig1.npy')#load in one-hot-encoded training data
@@ -144,7 +145,12 @@ def train_val_set(charge = 2):
     features = features_complete[features_complete[:,-1] == charge][:,:-1]#choose points with given charge, drop charge feature because of 2 heads
     label = label_complete[features_complete[:,-1] == charge]#choose appropiate residuals
     x_train, x_test, y_train, y_test = model_selection.train_test_split(features, label, test_size = 0.1, random_state=42)#train/val set split
-    print(f"The Initial Mean Absolute Error is: {sk.metrics.mean_absolute_error(fig1['CCS'], fig1['predicted_ccs'])}")#prints initial error
+    print(f"The Initial Mean Squared Error is: {sk.metrics.mean_squared_error(fig1['CCS'], fig1['predicted_ccs'])}")#prints initial error
+    del fig1
+    del features_complete
+    del label_complete
+    del features
+    del label
     return x_train, x_test, y_train, y_test
 
 def architecutre(x_train):
@@ -154,6 +160,11 @@ def architecutre(x_train):
     ff_dim = 32  # Hidden layer size in feed forward network inside transformer
 
     inputs = layers.Input(shape=(embed_dim,))
+    '''transformer_block1 = TransformerBlock(embed_dim, num_heads, ff_dim)
+    x = transformer_block1(inputs)
+    print(x.shape, x_train.shape)
+    transformer_block2 = TransformerBlock(x_train.shape[1], num_heads, ff_dim)
+    x = transformer_block2(x)'''
     transformer_block = TransformerBlock(embed_dim, num_heads, ff_dim)
     x = transformer_block(inputs)
     x = layers.GlobalAveragePooling1D()(x)
@@ -166,33 +177,43 @@ def architecutre(x_train):
     return model
 
 #%%
-def main():
-    charge = 2
-    x_train, x_test, y_train, y_test = train_val_set()
+def train():
+    charge = 3
+    x_train, x_test, y_train, y_test = train_val_set(charge = charge)
     X_train_tensor = np.asarray(x_train)
     y_train_tensor = np.asarray(y_train)
     X_test_tensor = np.asarray(x_test)
     y_test_tensor = np.asarray(y_test)
 
-    model = architecutre(x_train)
+    model = architecutre(x_train)#initializes new model
+    #model = tf.keras.models.load_model('../models/transformer_ch2')#loads existing model
    
     ############## Format input and fit model #############
 
     folder = f'../models/transformer_ch{charge}/'
-    callbacks = [tf.keras.callbacks.CSVLogger(folder+'training.log', append=True),  
-                tf.keras.callbacks.ModelCheckpoint(folder+'checkpoints/checkpoint{epoch:02d}', save_freq=5509*5)] 
+    cb = [tf.keras.callbacks.CSVLogger(folder+'training.log', append=True),  
+         tf.keras.callbacks.ModelCheckpoint(folder+'checkpoints/best', save_best_only=True)]
 
     print(len(X_train_tensor), "Training data")
     print(len(X_test_tensor), "Test data")
 
     model.compile(loss='mean_squared_error', optimizer='adam')
     history = model.fit(
-        X_train_tensor, y_train_tensor, batch_size=64, epochs=30, validation_data=(X_test_tensor, y_test_tensor), callbacks=callbacks
+        X_train_tensor, y_train_tensor, batch_size=64, epochs=30, validation_data=(X_test_tensor, y_test_tensor), callbacks=cb
     )
-    #!mkdir -p ../models/transformer_ch2 #create folder if doesnt exist
-    model.save('../models/transformer_ch2')
-    np.save('../models/history_tr2.npy',history.history)
 
 #%%
 if __name__ == "__main__":
-    main()
+    train()
+#%%
+loss = np.load('../models/transformer_ch2/history_tr2.npy', allow_pickle=True)
+# %%
+plt.plot(loss.flatten()[0]['loss'])
+plt.plot(loss.flatten()[0]['val_loss'])
+plt.title('model accuracy')
+plt.ylabel('loss')
+plt.xlabel('epoch')
+plt.legend(['train', 'val'], loc='upper left')
+# %%
+loss.flatten()[0]['val_loss'][-10:]
+# %%
