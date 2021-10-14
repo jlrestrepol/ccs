@@ -157,5 +157,3 @@ if __name__ == "__main__":
     charge = 4
     bayessian_opt(charge)
 
-
-np.append()
