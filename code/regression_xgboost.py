@@ -12,7 +12,7 @@ import sys
 import scipy
 import scipy
 #%%
-############# Obtimization routine #######################
+############# Optimization routine #######################
 def objective(space):
     """Function that will be optimized"""
     regressor = xgboost.XGBRegressor(n_estimators = space['n_estimators'],
