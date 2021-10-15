@@ -10,6 +10,7 @@ import seaborn as sns
 import joblib
 import sys
 import scipy
+import scipy
 #%%
 ############# Obtimization routine #######################
 def objective(space):
@@ -93,12 +94,7 @@ def test_set_results():
     xgb_ch4 = joblib.load(prefix+'_ch4')
 
     df_fig4 = pd.read_pickle('../Data/Fig4_powerlaw.pkl')
-    #features_fig4 = pd.read_pickle('../Data/').values
-    counts_aa = np.load('../Data/counts_fig4.npy', allow_pickle=True)
-    counts_dip = pd.read_pickle('../Data/dipeptide_fig4.pkl').values
-    features_fig4 = np.append(counts_aa[:,:-1], counts_dip, axis = 1)
-    np.save('../Data/extended_fig4.py', features_fig4)
-    #features_fig4 = np.load('../Data/counts_fig4.npy', allow_pickle=True)
+    features_fig4 = np.load('../Data/extended_fig4.npy', allow_pickle=True)
 
     df_fig4['xgboost'] = 0
     df_fig4.loc[df_fig4['Charge']==2,'xgboost'] = xgb_ch2.predict(features_fig4[features_fig4[:,-1]==2]) + df_fig4.loc[df_fig4['Charge']==2,'predicted_ccs']
