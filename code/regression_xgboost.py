@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import joblib
 import sys
+import scipy
 #%%
 ############# Obtimization routine #######################
 def objective(space):
@@ -86,24 +87,31 @@ def test_set_one_charge_results(charge):
 
 def test_set_results():
     '''Results on the complete test set'''
-
-    xgb_ch2 = joblib.load('xgb_dipeptides_ch2')
-    xgb_ch3 = joblib.load('xgb_dipeptides_ch3')
-    xgb_ch4 = joblib.load('xgb_dipeptides_ch4')
+    prefix = '../models/xgboost_extended/xgb_extended'
+    xgb_ch2 = joblib.load(prefix+'_ch2')
+    xgb_ch3 = joblib.load(prefix+'_ch3')
+    xgb_ch4 = joblib.load(prefix+'_ch4')
 
     df_fig4 = pd.read_pickle('../Data/Fig4_powerlaw.pkl')
-    features_fig4 = pd.read_pickle('../Data/dipeptide_fig4.pkl').values
+    #features_fig4 = pd.read_pickle('../Data/').values
+    counts_aa = np.load('../Data/counts_fig4.npy', allow_pickle=True)
+    counts_dip = pd.read_pickle('../Data/dipeptide_fig4.pkl').values
+    features_fig4 = np.append(counts_aa[:,:-1], counts_dip, axis = 1)
+    np.save('../Data/extended_fig4.py', features_fig4)
+    #features_fig4 = np.load('../Data/counts_fig4.npy', allow_pickle=True)
 
     df_fig4['xgboost'] = 0
-    df_fig4.loc[df_fig4['Charge']==2,'xgboost'] = xgb_ch2.predict(features_fig4[features_fig4[:,-1]==2]) + df_fig4.loc[df_fig4['Charge']==2,'CCS']
-    df_fig4.loc[df_fig4['Charge']==3,'xgboost'] = xgb_ch3.predict(features_fig4[features_fig4[:,-1]==3]) + df_fig4.loc[df_fig4['Charge']==3,'CCS']
-    df_fig4.loc[df_fig4['Charge']==4,'xgboost'] = xgb_ch4.predict(features_fig4[features_fig4[:,-1]==4]) + df_fig4.loc[df_fig4['Charge']==4,'CCS']
+    df_fig4.loc[df_fig4['Charge']==2,'xgboost'] = xgb_ch2.predict(features_fig4[features_fig4[:,-1]==2]) + df_fig4.loc[df_fig4['Charge']==2,'predicted_ccs']
+    df_fig4.loc[df_fig4['Charge']==3,'xgboost'] = xgb_ch3.predict(features_fig4[features_fig4[:,-1]==3]) + df_fig4.loc[df_fig4['Charge']==3,'predicted_ccs']
+    df_fig4.loc[df_fig4['Charge']==4,'xgboost'] = xgb_ch4.predict(features_fig4[features_fig4[:,-1]==4]) + df_fig4.loc[df_fig4['Charge']==4,'predicted_ccs']
 
     fig, ax = plt.subplots(nrows = 1, ncols = 2, figsize = (20, 6))
-    ax[0].hist((df_fig4['CCS']-df_fig4['xgboost'])/df_fig4['xgboost']*100, bins = 50)
+    res_rel = (df_fig4['CCS']-df_fig4['xgboost'])/df_fig4['xgboost']*100
+    ax[0].hist(res_rel, bins = 50, label = f'MAD = {np.round(scipy.stats.median_abs_deviation(res_rel), 4)}')
     ax[0].set_xlabel('Relative Error of CCS')
     ax[0].set_ylabel('Counts')
     ax[0].set_title('Relative error of CCS w.r.t Ground Truth')
+    ax[0].legend()
 
     corr, _ = scipy.stats.pearsonr(df_fig4['xgboost'],df_fig4['CCS'])
     ax[1].scatter(df_fig4['CCS'], df_fig4['xgboost'], label = f'Corr : {np.round(corr, 4)}', s = 0.1)
