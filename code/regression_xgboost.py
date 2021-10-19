@@ -136,15 +136,16 @@ def test_set_results():
 def bayessian_opt(charge):
 
     ############### Load in data and calculate error ####################
+    print('Loading data')
     fig1 = pd.read_pickle('../Data/Fig1_powerlaw.pkl')
-    counts_aa = np.load('../Data/counts_fig1.npy', allow_pickle=True)
-    counts_dip = pd.read_pickle('../Data/dipeptide_fig1.pkl').values
-    features_complete = np.append(counts_aa[:,:-1], counts_dip, axis = 1)
+    features_complete =  np.load('../Data/tripeptides_fig1.npy', allow_pickle=True)
     label_complete = (fig1['CCS'] - fig1['predicted_ccs']).values
     
+    print('Take specific charge state')
     features_ch2 = features_complete[features_complete[:,-1] == charge]
     label_ch2 = label_complete[features_complete[:,-1] == charge]
     #subsample
+    print('Subsample')
     idx = np.random.choice(features_ch2.shape[0], features_ch2.shape[0], replace = False)
     features = features_ch2[idx]
     label = label_ch2[idx]
