@@ -112,22 +112,24 @@ def diagnostic_plot(file_path):
     plt.xlabel('epoch')
     plt.legend(['train', 'val'], loc='upper left')
 
-def test_set_results(charge = 2):
+def test_set_one_charge_results(charge = 2):
     '''Plots in the test set: scatter and histogram'''
     ### Load-in model and Data
     df_fig4 = pd.read_pickle('../Data/Fig4_powerlaw.pkl')
     features_fig4 = np.load('../Data/one_hot_encoded_fig4.npy')
-    model = tf.keras.models.load_model('../models/transformer_ch2')
+    path = f'../models/transformer_ch{charge}/checkpoints/best'
+    model = tf.keras.models.load_model(path)
     ### Separate by charge and make predictions, change after all the models are trained
     res  = model.predict(features_fig4[features_fig4[:,-1] == charge][:,:-1])
     pred_ccs = df_fig4[df_fig4['Charge']==charge]['predicted_ccs'] + res.flatten()
-
+    err_rel = (pred_ccs - df_fig4[df_fig4['Charge']==charge]['CCS'])/pred_ccs*100
     ### Histogram and scatter plot
     fig, ax = plt.subplots(nrows = 1, ncols = 2, figsize = (20, 6))
-    ax[0].hist((df_fig4[df_fig4['Charge']==charge]['CCS']-pred_ccs)/pred_ccs*100, bins = 50)
+    ax[0].hist(err_rel, bins = 50, label = f'MAD = {np.round(scipy.stats.median_abs_deviation(err_rel), 4)}')
     ax[0].set_xlabel('Relative Error of CCS')
     ax[0].set_ylabel('Counts')
     ax[0].set_title('Relative error of CCS w.r.t Ground Truth, Charge 2')
+    ax[0].legend()
 
     corr, _ = scipy.stats.pearsonr(df_fig4[df_fig4['Charge']==charge]['CCS'],pred_ccs)
     ax[1].scatter(df_fig4[df_fig4['Charge']==charge]['CCS'],pred_ccs, label = f'Corr : {np.round(corr, 3)}', s = 0.1)
@@ -135,6 +137,38 @@ def test_set_results(charge = 2):
     ax[1].set_ylabel('Predicted CCS')
     ax[1].set_title('Scatter Plot CCS vs predicted CCS, Charge 2')
     ax[1].plot(np.arange(300,600), np.arange(300,600), 'b--')
+    ax[1].legend()
+
+def test_set_results():
+    '''Results on the complete test set'''
+    prefix = '../models/transformer'
+    model_ch2 = tf.keras.models.load_model(prefix+'_ch2/checkpoints/best')
+    model_ch3 = tf.keras.models.load_model(prefix+'_ch3/checkpoints/best')
+    model_ch4 = tf.keras.models.load_model(prefix+'_ch4/checkpoints/best')
+
+    df_fig4 = pd.read_pickle('../Data/Fig4_powerlaw.pkl')
+    features_fig4 = np.load('../Data/one_hot_encoded_fig4.npy', allow_pickle=True)
+
+    df_fig4['transformer'] = 0
+    df_fig4.loc[df_fig4['Charge']==2,'transformer'] = model_ch2.predict(features_fig4[features_fig4[:,-1]==2][:,:-1]).flatten() + df_fig4.loc[df_fig4['Charge']==2,'predicted_ccs']
+    df_fig4.loc[df_fig4['Charge']==3,'transformer'] = model_ch3.predict(features_fig4[features_fig4[:,-1]==3][:,:-1]).flatten() + df_fig4.loc[df_fig4['Charge']==3,'predicted_ccs']
+    df_fig4.loc[df_fig4['Charge']==4,'transformer'] = model_ch4.predict(features_fig4[features_fig4[:,-1]==4][:,:-1]).flatten() + df_fig4.loc[df_fig4['Charge']==4,'predicted_ccs']
+
+    fig, ax = plt.subplots(nrows = 1, ncols = 2, figsize = (20, 6))
+    res_rel = (df_fig4['CCS']-df_fig4['transformer'])/df_fig4['transformer']*100
+    ax[0].hist(res_rel, bins = 50, label = f'MAD = {np.round(scipy.stats.median_abs_deviation(res_rel), 4)}')
+    ax[0].set_xlabel('Relative Error of CCS')
+    ax[0].set_ylabel('Counts')
+    ax[0].set_title('Relative error of CCS w.r.t Ground Truth')
+    ax[0].legend()
+
+    corr, _ = scipy.stats.pearsonr(df_fig4['transformer'],df_fig4['CCS'])
+    print(f'The correlation is: {corr}')
+    ax[1].scatter(df_fig4['CCS'], df_fig4['transformer'], label = f'Corr : {np.round(corr, 5)}', s = 0.1)
+    ax[1].set_xlabel('CCS')
+    ax[1].set_ylabel('Predicted CCS')
+    ax[1].set_title('Scatter Plot CCS vs predicted CCS')
+    ax[1].plot(np.arange(300,800), np.arange(300,800), 'b--')
     ax[1].legend()
 
 def train_val_set(charge = np.nan):
@@ -191,7 +225,7 @@ def train():
     ############## Format input and fit model #############
 
     folder = f'../models/transformer_ch{charge}/'
-    cb = [tf.keras.callbacks.CSVLogger(folder+'training.log', append=True),  
+    cb = [tf.keras.callbacks.CSVLogger(folder+'training.log', append=False),  
          tf.keras.callbacks.ModelCheckpoint(folder+'checkpoints/best', save_best_only=True)]
 
     print(len(X_train_tensor), "Training data")
@@ -206,14 +240,5 @@ def train():
 if __name__ == "__main__":
     train()
 #%%
-loss = np.load('../models/transformer_ch2/history_tr2.npy', allow_pickle=True)
-# %%
-plt.plot(loss.flatten()[0]['loss'])
-plt.plot(loss.flatten()[0]['val_loss'])
-plt.title('model accuracy')
-plt.ylabel('loss')
-plt.xlabel('epoch')
-plt.legend(['train', 'val'], loc='upper left')
-# %%
-loss.flatten()[0]['val_loss'][-10:]
+diagnostic_plot('../models/transformer_ch2/training.log')
 # %%
