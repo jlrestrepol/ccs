@@ -8,7 +8,6 @@ import sklearn as sk
 import matplotlib.pyplot as plt
 import seaborn as sns
 import joblib
-import sys
 import scipy
 import scipy
 #%%
@@ -86,15 +85,30 @@ def test_set_one_charge_results(charge):
     ax[1].plot(np.arange(300,600), np.arange(300,600), 'b--')
     ax[1].legend(loc = 'lower right')
 
+def get_names(name):
+    """Returns file name of tuple model file and data file"""
+
+    model_name = {'One hot encoded':'xgboost_ohe', 'Counts':'xgboost_count',
+    'Di-peptides':'xgboost_dip', 'Tri-peptides' : 'xgboost_trip',
+    'Extended':'xgboost_extended'}
+    data_name = {'One hot encoded':'one_hot_encoded_fig4.npy',
+    'Counts':'counts_fig4.npy', 'Di-peptides':'dipeptide_fig4.npy', 
+    'Tri-peptides' : 'tripeptides_fig4.npy',
+    'Extended':'extended_fig4.npy'}
+    return model_name[name], data_name[name]
+
+
 def test_set_results():
     '''Results on the complete test set'''
-    prefix = '../models/xgboost_extended/xgb_extended'
-    xgb_ch2 = joblib.load(prefix+'_ch2')
-    xgb_ch3 = joblib.load(prefix+'_ch3')
-    xgb_ch4 = joblib.load(prefix+'_ch4')
+    model, data = get_names('Tri-peptides')
+    prefix_models = '/mnt/pool-cox-data08/Juan/ccs/models/'
+    xgb_ch2 = joblib.load(prefix_models+model+'/xgb_ch2')
+    xgb_ch3 = joblib.load(prefix_models+model+'/xgb_ch3')
+    xgb_ch4 = joblib.load(prefix_models+model+'/xgb_ch4')
 
+    prefix_data = '/mnt/pool-cox-data08/Juan/ccs/Data/'
     df_fig4 = pd.read_pickle('../Data/Fig4_powerlaw.pkl')
-    features_fig4 = np.load('../Data/extended_fig4.npy', allow_pickle=True)
+    features_fig4 = np.load(prefix_data+data, allow_pickle=True)
 
     df_fig4['xgboost'] = 0
     df_fig4.loc[df_fig4['Charge']==2,'xgboost'] = xgb_ch2.predict(features_fig4[features_fig4[:,-1]==2]) + df_fig4.loc[df_fig4['Charge']==2,'predicted_ccs']
@@ -102,6 +116,7 @@ def test_set_results():
     df_fig4.loc[df_fig4['Charge']==4,'xgboost'] = xgb_ch4.predict(features_fig4[features_fig4[:,-1]==4]) + df_fig4.loc[df_fig4['Charge']==4,'predicted_ccs']
 
     fig, ax = plt.subplots(nrows = 1, ncols = 2, figsize = (20, 6))
+    fig.suptitle(model[:-1], fontsize = 12)
     res_rel = (df_fig4['CCS']-df_fig4['xgboost'])/df_fig4['xgboost']*100
     ax[0].hist(res_rel, bins = 50, label = f'MAD = {np.round(scipy.stats.median_abs_deviation(res_rel), 4)}')
     ax[0].set_xlabel('Relative Error of CCS')
@@ -161,3 +176,59 @@ if __name__ == "__main__":
     charge = 4
     bayessian_opt(charge)
 
+
+#%%
+prefix = '../models/xgboost_count/xgb_counts'
+xgb_ch2 = joblib.load(prefix+'_ch2')
+xgb_ch3 = joblib.load(prefix+'_ch3')
+xgb_ch4 = joblib.load(prefix+'_ch4')
+
+df_fig4 = pd.read_pickle('../Data/Fig4_powerlaw.pkl')
+features_fig4 = np.load('../Data/counts_fig4.npy', allow_pickle=True)
+
+df_fig4['xgboost_aa'] = 0
+df_fig4.loc[df_fig4['Charge']==2,'xgboost_aa'] = xgb_ch2.predict(features_fig4[features_fig4[:,-1]==2]) + df_fig4.loc[df_fig4['Charge']==2,'predicted_ccs']
+df_fig4.loc[df_fig4['Charge']==3,'xgboost_aa'] = xgb_ch3.predict(features_fig4[features_fig4[:,-1]==3]) + df_fig4.loc[df_fig4['Charge']==3,'predicted_ccs']
+df_fig4.loc[df_fig4['Charge']==4,'xgboost_aa'] = xgb_ch4.predict(features_fig4[features_fig4[:,-1]==4]) + df_fig4.loc[df_fig4['Charge']==4,'predicted_ccs']
+
+prefix = '../models/xgboost_dip/xgb_dipeptides'
+features_fig4 = np.load('../Data/dipeptide_fig4.npy', allow_pickle=True)
+xgb_ch2 = joblib.load(prefix+'_ch2')
+xgb_ch3 = joblib.load(prefix+'_ch3')
+xgb_ch4 = joblib.load(prefix+'_ch4')
+
+df_fig4['xgboost_di'] = 0
+df_fig4.loc[df_fig4['Charge']==2,'xgboost_di'] = xgb_ch2.predict(features_fig4[features_fig4[:,-1]==2]) + df_fig4.loc[df_fig4['Charge']==2,'predicted_ccs']
+df_fig4.loc[df_fig4['Charge']==3,'xgboost_di'] = xgb_ch3.predict(features_fig4[features_fig4[:,-1]==3]) + df_fig4.loc[df_fig4['Charge']==3,'predicted_ccs']
+df_fig4.loc[df_fig4['Charge']==4,'xgboost_di'] = xgb_ch4.predict(features_fig4[features_fig4[:,-1]==4]) + df_fig4.loc[df_fig4['Charge']==4,'predicted_ccs']
+# %%
+combined = np.mean([df_fig4['xgboost_aa'], df_fig4['xgboost_di']], axis = 0)
+res_rel = (df_fig4['CCS'] - combined)/combined*100
+plt.hist(res_rel, bins = 50, label = f'MAD = {np.round(scipy.stats.median_abs_deviation(res_rel), 4)}')
+plt.xlabel('residual')
+plt.title('Prediction vs Ground Truth')
+plt.legend()
+# %%
+idx = np.argmin([np.abs(df_fig4['CCS'] - df_fig4['xgboost_aa']),np.abs(df_fig4['CCS'] -  df_fig4['xgboost_di'])], axis = 0)
+# %%
+idx
+# %%
+best_pred = np.zeros_like(df_fig4['CCS'])
+for i, (label, row) in enumerate(df_fig4.iterrows()):
+    best_pred[i] = [row['xgboost_aa'], row['xgboost_di']][idx[i]]
+# %%
+res_rel = (df_fig4['CCS'] - best_pred)/best_pred*100
+fig, ax = plt.subplots(nrows = 1, ncols = 2, figsize = (20, 6))
+ax[0].hist(res_rel, bins = 50, label = f'MAD = {np.round(scipy.stats.median_abs_deviation(res_rel), 4)}')
+ax[0].set_xlabel('residual')
+ax[0].set_title('Prediction vs Ground Truth')
+ax[0].legend()
+
+corr, _ = scipy.stats.pearsonr(best_pred,df_fig4['CCS'])
+ax[1].scatter(df_fig4['CCS'], best_pred, label = f'Corr : {np.round(corr, 4)}', s = 0.1)
+ax[1].set_xlabel('CCS')
+ax[1].set_ylabel('Predicted CCS')
+ax[1].set_title('Scatter Plot CCS vs predicted CCS')
+ax[1].plot(np.arange(300,800), np.arange(300,800), 'b--')
+ax[1].legend()
+# %%
