@@ -130,3 +130,34 @@ dipeptides = pd.DataFrame(X)
 dipeptides['Charge'] = df['Charge']
 # %%
 dipeptides.to_pickle('../Data/dipeptide_fig4.pkl')
+
+
+# %%
+########## Tripeptides
+df = pd.read_csv('../dl_paper/SourceData_Figure_4.csv').loc[:,['Modified_sequence', 'Charge']]
+seqs = df['Modified_sequence'].str.replace('_','')
+aa = ['(', ')', 'A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M','N', 'P', 'Q', 'R', 'S', 
+'T', 'V', 'W', 'Y', 'a', 'c', 'o','x']
+voc = [l3+l2+l1 for l1 in aa for l2 in aa for l3 in aa]
+vectorizer = CountVectorizer(lowercase=False, ngram_range = (3,3), analyzer='char', 
+vocabulary=voc, dtype = np.int8)
+X = vectorizer.fit_transform(seqs).todense()
+tripeptides = pd.DataFrame(X, columns = voc)
+tripeptides['Charge'] = df['Charge']
+# %%
+np.save('../Data/tripeptide_fig4', tripeptides.values, allow_pickle=True)
+
+#%%
+######### Period 4
+df = pd.read_csv('../dl_paper/SourceData_Figure_4.csv').loc[:,['Modified_sequence', 'Charge']]
+seqs = df['Modified_sequence'].str.replace('_','')
+#aa = ['(', ')', 'A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M','N', 'P', 'Q', 'R', 'S', 
+#'T', 'V', 'W', 'Y', 'a', 'c', 'o','x']
+aa = ['(', ')', 'A', 'C']
+voc = [l2+l1 for l1 in aa for l2 in aa]
+vectorizer = CountVectorizer(lowercase=False, ngram_range = (1,1), analyzer='word', 
+vocabulary=voc, token_pattern = r"..",dtype = np.int8)
+vectorizer.fit(seqs)
+#vectorizer.transform(seqs[:1]).todense()
+# %%
+re.findall()
