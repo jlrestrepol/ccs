@@ -59,114 +59,122 @@ model_params = {"lab_name": "label", "fname": "cache/one_dat_cache_full_label.np
   "scaling_dict": {"0": [275.41885375976557, 1118.7861328125]}}
 
 
-
-#%%
 ########### Encode Sequence #############
-df = pd.read_csv('../dl_paper/SourceData_Figure_1.csv').loc[:,['Modified sequence', 'Charge']]
-data = df['Modified sequence']
-label_encoder = fit_encoder(data)
-pp_data = prepare_data(df, label_encoder)
-encoded = int_dataset(pp_data, model_params['timesteps'], middle = False)
-encoded = encoded[:,:,0]
-encoded
-#%%
-np.save('../Data/encoded_fig1', encoded, allow_pickle=True)
+def encode_seq(check = True, save = False):
+    """Reads-in the raw data, fits a encoder to it, transforms it and saves it"""
+    df = pd.read_csv('../dl_paper/SourceData_Figure_1.csv').loc[:,['Modified sequence', 'Charge']]
+    data = df['Modified sequence']
+    label_encoder = fit_encoder(data)#I dont specify the vocabulary, but every aa/symbol should be present anyway
+    pp_data = prepare_data(df, label_encoder)
+    encoded = int_dataset(pp_data, model_params['timesteps'], middle = False)
+    encoded = encoded[:,:,0]
+    
+    if check:#check that the encoding worked correctly
+        decoded = ["".join(label_encoder.inverse_transform(e)) for e in encoded]
+        decoded = [e[:e.find('_')] for e in decoded]
+        print(f"Was the reconstruction perfect? {np.array_equal(df['Modified sequence'].str.replace('_','').to_list(), decoded)}")
 
+    if save:#save the matrix
+        prefix_data = '/mnt/pool-cox-data08/Juan/ccs/Data/'
+        np.save(prefix_data+'encoded_fig1', encoded, allow_pickle=True)
 
-
-
-# %%
-############## Check That the encoding worked correctly ###########
-#Fig1
-#encoded = np.load('../Data/encoded_fig1.npy')[:,:-1]
-decoded = ["".join(label_encoder.inverse_transform(e)) for e in encoded]
-decoded = [e[:e.find('_')] for e in decoded]
-f"Was the reconstruction perfect? {np.array_equal(df['Modified sequence'].str.replace('_','').to_list(), decoded)}"
-# %%
-#Fig4
-df4 = pd.read_csv('../dl_paper/SourceData_Figure_4.csv')
-encoded = np.load('../Data/encoded_fig4.npy')
-decoded = ["".join(label_encoder.inverse_transform(e)) for e in encoded]
-decoded = [e[:e.find('_')] for e in decoded]
-f"Was the reconstruction perfect? {np.array_equal(df4['Modified_sequence'].str.replace('_','').to_list(), decoded)}"
-
-
-
-
+    return encoded
 
 ############### Transform to one-hot-encoded ###################
-# %%
-encoded_fig1 = np.load('../Data/encoded_fig1.npy')
-encoded_fig4 = np.load('../Data/encoded_fig4.npy')
-oh_encoder = sk_pp.OneHotEncoder(sparse = False, categories = [np.arange(27)]*66, dtype=np.int8)
-oh_encoder.fit(encoded_fig4[:,:-1])
-ohe = oh_encoder.transform(encoded_fig4[:,:-1])
-ohe = np.append(ohe, encoded_fig4[:,-1].reshape(-1,1), axis = 1)
-#%%
-np.save('../Data/one_hot_encoded_fig4', ohe, allow_pickle=True)
+def ohe_seq(save = False):
+    """Reads-in the encoded sequence, fits a ohe on the training data with specified categories and transform the data"""
+    prefix_data = '/mnt/pool-cox-data08/Juan/ccs/Data/'
+    encoded_fig1 = np.load(prefix_data+'encoded_fig1.npy')
+    encoded_fig4 = np.load(prefix_data+'encoded_fig4.npy')
+    oh_encoder = sk_pp.OneHotEncoder(sparse = False, categories = [np.arange(27)]*66, dtype=np.int8)#Initializes ohe with given classes
+    oh_encoder.fit(encoded_fig1[:,:-1])#Fit the ohe in the training data without the charge
+    ohe = oh_encoder.transform(encoded_fig4[:,:-1])#Transform training/test data
+    ohe = np.append(ohe, encoded_fig4[:,-1].reshape(-1,1), axis = 1)#Adds the charge
+    
+    if save:#saves the matrix
+        np.save(prefix_data+'/one_hot_encoded_fig4', ohe, allow_pickle=True)
+    
+    return ohe
 
-# %%
 ############ Transfor to Count Matrix ##############
-encoded_fig1 = np.load('../Data/encoded_fig4.npy')
-counts_matrix = np.zeros((encoded_fig1.shape[0], 27), dtype=np.int8)
-for i, row in enumerate(encoded_fig1):
-    index, counts = np.unique(row[:-1], return_counts=True)
-    counts_matrix[i, index] = counts
-counts_matrix = np.append(counts_matrix, encoded_fig1[:,-1].reshape(-1,1), axis = 1)
-# %%
-np.save('../Data/counts_fig4', counts_matrix, allow_pickle=True)
+def count_seq(save = False):
+    """Read-in the ohe sequences and creates from it a count matrix of aa"""
+    prefix_data = '/mnt/pool-cox-data08/Juan/ccs/Data/'
+    encoded_fig1 = np.load(prefix_data+'encoded_fig1.npy')
+    counts_matrix = np.zeros((encoded_fig1.shape[0], 27), dtype=np.int8)
+    for i, row in enumerate(encoded_fig1):
+        index, counts = np.unique(row[:-1], return_counts=True)
+        counts_matrix[i, index] = counts
+    counts_matrix = np.append(counts_matrix, encoded_fig1[:,-1].reshape(-1,1), axis = 1)#appends charge
 
-# %%
-########## Dipeptides
-df = pd.read_csv('../dl_paper/SourceData_Figure_4.csv').loc[:,['Modified_sequence', 'Charge']]
-seqs = df['Modified_sequence'].str.replace('_','')
-aa = ['(', ')', 'A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M','N', 'P', 'Q', 'R', 'S', 
-'T', 'V', 'W', 'Y', 'a', 'c', 'o','x']
-voc = [l2+l1 for l1 in aa for l2 in aa]
-vectorizer = CountVectorizer(lowercase=False, ngram_range = (2,2), analyzer='char', 
-vocabulary=voc, dtype = np.int8)
-X = vectorizer.fit_transform(seqs).todense()
-dipeptides = pd.DataFrame(X)
-dipeptides['Charge'] = df['Charge']
-# %%
-dipeptides.to_pickle('../Data/dipeptide_fig4.pkl')
+    if save:
+        np.save(prefix_data+'counts_fig1', counts_matrix, allow_pickle=True)
+    
+    return counts_matrix
+
+########## Dipeptides ############
+def dipeptides_seq(save = False):
+    """Read-in raw data, create vocabulary of dipeptides, fit a CountVectorizer object to get count of dipeptides"""
+    
+    df = pd.read_csv('../dl_paper/SourceData_Figure_4.csv').loc[:,['Modified_sequence', 'Charge']]
+    seqs = df['Modified_sequence'].str.replace('_','')
+    aa = ['(', ')', 'A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M','N', 'P', 'Q', 'R', 'S', 
+    'T', 'V', 'W', 'Y', 'a', 'c', 'o','x']
+    voc = [l2+l1 for l1 in aa for l2 in aa]#Creates vocabulary of dipeptides
+    vectorizer = CountVectorizer(lowercase=False, ngram_range = (2,2), analyzer='char', vocabulary=voc, dtype = np.int8)#Initializes the object
+    X = vectorizer.fit_transform(seqs).todense()#Creates count matrix of dipeptides
+    dipeptides = pd.DataFrame(X)
+    dipeptides['Charge'] = df['Charge']
+    
+    if save:
+        prefix_data = '/mnt/pool-cox-data08/Juan/ccs/Data/'
+        #dipeptides.to_pickle(prefix_data+'dipeptide_fig4.pkl')
+        np.save(prefix_data+'dipeptide_fig4', dipeptides.values, allow_pickle=True)
+
+    return dipeptides
+
+########## Tripeptides ############
+def tripeptides_seq(save = False):
+    """Read-in raw data, create vocabulary of tripeptides, fit a CountVectorizer object to get count of dipeptides"""
+
+    df = pd.read_csv('../dl_paper/SourceData_Figure_4.csv').loc[:,['Modified_sequence', 'Charge']]
+    seqs = df['Modified_sequence'].str.replace('_','')
+    aa = ['(', ')', 'A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M','N', 'P', 'Q', 'R', 'S', 
+    'T', 'V', 'W', 'Y', 'a', 'c', 'o','x']
+    voc = [l3+l2+l1 for l1 in aa for l2 in aa for l3 in aa]#Creates vocabulary of tripeptides
+    vectorizer = CountVectorizer(lowercase=False, ngram_range = (3,3), analyzer='char', vocabulary=voc, dtype = np.int8)#Init
+    X = vectorizer.fit_transform(seqs).todense()#Creates count matrix of tripeptides
+    tripeptides = pd.DataFrame(X, columns = voc)
+    tripeptides['Charge'] = df['Charge']#Adds charge
+
+    if save:
+        prefix_data = '/mnt/pool-cox-data08/Juan/ccs/Data/'
+        np.save(prefix_data+'tripeptide_fig4', tripeptides.values, allow_pickle=True)
 
 
-# %%
-########## Tripeptides
-df = pd.read_csv('../dl_paper/SourceData_Figure_4.csv').loc[:,['Modified_sequence', 'Charge']]
-seqs = df['Modified_sequence'].str.replace('_','')
-aa = ['(', ')', 'A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M','N', 'P', 'Q', 'R', 'S', 
-'T', 'V', 'W', 'Y', 'a', 'c', 'o','x']
-voc = [l3+l2+l1 for l1 in aa for l2 in aa for l3 in aa]
-vectorizer = CountVectorizer(lowercase=False, ngram_range = (3,3), analyzer='char', 
-vocabulary=voc, dtype = np.int8)
-X = vectorizer.fit_transform(seqs).todense()
-tripeptides = pd.DataFrame(X, columns = voc)
-tripeptides['Charge'] = df['Charge']
-# %%
-np.save('../Data/tripeptide_fig4', tripeptides.values, allow_pickle=True)
+######### Period 4 ##########
+def helix_seq(save = False, helix_dip = True):
+    """Read-in raw data, creates 5-pep vocab, creates count matrix and then sums up the terms correspondent to the same start/end character"""
 
-#%%
-######### Period 4
-df = pd.read_csv('../dl_paper/SourceData_Figure_1.csv').loc[:,['Modified sequence', 'Charge']]
-seqs = df['Modified sequence'].str.replace('_','')
-aa = ['(', ')', 'A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M','N', 'P', 'Q', 'R', 'S', 
-'T', 'V', 'W', 'Y', 'a', 'c', 'o','x']
-voc = [l1+l3+l4+l5+l2 for l1 in aa for l2 in aa for l3 in aa for l4 in aa for l5 in aa]
-vectorizer = CountVectorizer(lowercase=False, ngram_range = (5,5), analyzer='char', 
-vocabulary=voc, dtype = np.int8)
-X = vectorizer.fit_transform(seqs)
-period4 = np.zeros((X.shape[0], 26*26), dtype = np.int8)
-for col in range(26*26):
-    period4[:,col] = X[:,col*26*26*26:(col+1)*26*26*26].sum(1).A1
-#After manually inspecting the sequence, it looks fine
-np.save('../Data/period1_fig1', period4, allow_pickle=True)
-# %%
-####### Period4 and di-peptides
-period4 = np.load('../Data/period4_fig4.npy', allow_pickle=True)
-dipeptides = np.load('../Data/dipeptide_fig4.npy', allow_pickle = True)
-dip_hel = np.append(period4, dipeptides, axis = 1)
-# %%
-np.save('../Data/dip_hel_fig4.npy', dip_hel, allow_pickle=True)
-# %%
+    df = pd.read_csv('../dl_paper/SourceData_Figure_1.csv').loc[:,['Modified sequence', 'Charge']]
+    seqs = df['Modified sequence'].str.replace('_','')
+    aa = ['(', ')', 'A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M','N', 'P', 'Q', 'R', 'S', 
+    'T', 'V', 'W', 'Y', 'a', 'c', 'o','x']
+    voc = [l1+l3+l4+l5+l2 for l1 in aa for l2 in aa for l3 in aa for l4 in aa for l5 in aa]#5-pep vocab
+    vectorizer = CountVectorizer(lowercase=False, ngram_range = (5,5), analyzer='char', vocabulary=voc, dtype = np.int8)
+    X = vectorizer.fit_transform(seqs)#5-pep count matrix
+    period4 = np.zeros((X.shape[0], 26*26), dtype = np.int8)
+    for col in range(26*26):
+        period4[:,col] = X[:,col*26*26*26:(col+1)*26*26*26].sum(1).A1#collapse it to 2-pep matrix (helix-like)
+    #After manually inspecting the sequence, it looks fine
+
+    if save:
+        prefix_data = '/mnt/pool-cox-data08/Juan/ccs/Data/'
+        np.save(prefix_data+'period1_fig1', period4, allow_pickle=True)
+    
+    if helix_dip:# Merge helix and di-peptides
+        prefix_data = '/mnt/pool-cox-data08/Juan/ccs/Data/'
+        dipeptides = np.load(prefix_data+'dipeptide_fig4.npy', allow_pickle = True)
+        dip_hel = np.append(period4, dipeptides, axis = 1)#appends helix and dipeptides
+        if save:
+            np.save(prefix_data+'dip_hel_fig4.npy', dip_hel, allow_pickle=True)
