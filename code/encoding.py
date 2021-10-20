@@ -163,3 +163,10 @@ for col in range(26*26):
 #After manually inspecting the sequence, it looks fine
 np.save('../Data/period1_fig1', period4, allow_pickle=True)
 # %%
+####### Period4 and di-peptides
+period4 = np.load('../Data/period4_fig4.npy', allow_pickle=True)
+dipeptides = np.load('../Data/dipeptide_fig4.npy', allow_pickle = True)
+dip_hel = np.append(period4, dipeptides, axis = 1)
+# %%
+np.save('../Data/dip_hel_fig4.npy', dip_hel, allow_pickle=True)
+# %%
