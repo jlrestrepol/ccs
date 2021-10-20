@@ -149,15 +149,17 @@ np.save('../Data/tripeptide_fig4', tripeptides.values, allow_pickle=True)
 
 #%%
 ######### Period 4
-df = pd.read_csv('../dl_paper/SourceData_Figure_4.csv').loc[:,['Modified_sequence', 'Charge']]
-seqs = df['Modified_sequence'].str.replace('_','')
-#aa = ['(', ')', 'A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M','N', 'P', 'Q', 'R', 'S', 
-#'T', 'V', 'W', 'Y', 'a', 'c', 'o','x']
-aa = ['(', ')', 'A', 'C']
-voc = [l2+l1 for l1 in aa for l2 in aa]
-vectorizer = CountVectorizer(lowercase=False, ngram_range = (1,1), analyzer='word', 
-vocabulary=voc, token_pattern = r"..",dtype = np.int8)
-vectorizer.fit(seqs)
-#vectorizer.transform(seqs[:1]).todense()
+df = pd.read_csv('../dl_paper/SourceData_Figure_1.csv').loc[:,['Modified sequence', 'Charge']]
+seqs = df['Modified sequence'].str.replace('_','')
+aa = ['(', ')', 'A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M','N', 'P', 'Q', 'R', 'S', 
+'T', 'V', 'W', 'Y', 'a', 'c', 'o','x']
+voc = [l1+l3+l4+l5+l2 for l1 in aa for l2 in aa for l3 in aa for l4 in aa for l5 in aa]
+vectorizer = CountVectorizer(lowercase=False, ngram_range = (5,5), analyzer='char', 
+vocabulary=voc, dtype = np.int8)
+X = vectorizer.fit_transform(seqs)
+period4 = np.zeros((X.shape[0], 26*26), dtype = np.int8)
+for col in range(26*26):
+    period4[:,col] = X[:,col*26*26*26:(col+1)*26*26*26].sum(1).A1
+#After manually inspecting the sequence, it looks fine
+np.save('../Data/period1_fig1', period4, allow_pickle=True)
 # %%
-re.findall()
