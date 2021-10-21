@@ -117,10 +117,10 @@ def downloaded():
 if __name__ == '__main__':
     rmse_list, seq_list = downloaded()
     
-    with open("rmse_list", "wb") as fp:
+    with open("rmse_list.pkl", "wb") as fp:
         pickle.dump(rmse_list, fp)
 
-    with open("seq_list", "wb") as fp:
+    with open("seq_list.pkl", "wb") as fp:
         pickle.dump(seq_list, fp)
     
     '''
