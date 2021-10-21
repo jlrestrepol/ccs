@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import json
 import os
+import pickle
 
 #%%
 
@@ -39,7 +40,7 @@ def one_fit(file_name = '/200/ranked_1.pdb'):
     return rmse
 
 #%%
-def main():
+def predicted():
     data_folder = '/fs/pool/pool-cox-projects-fold/predictions/full_dbs/fasta'
     rmse_list = []
     seq_list = []
@@ -77,10 +78,52 @@ def main():
     ax.set_title('Distribution of RMSE-PLDDT>70')
     
     return rmse_list, seq_list
+
+#%%
+def downloaded():
+    data_folder = '../Data/AlphaFold/'
+    rmse_list = []
+    seq_list = []
+    for root,dirs,files in os.walk(data_folder):
+
+        if len(dirs) > 0:
+            continue
+        print(root)
+        for i, file in enumerate(files): 
+            structure_alpha = Bio.PDB.PDBParser().get_structure("alpha",root+'/'+file)
+            ppb=PPBuilder()
+            seq = str([pp.get_sequence() for pp in ppb.build_peptides(structure_alpha)][0])
+            seq_list.append(seq)
+            model_alpha = structure_alpha[0]
+            chain_a = model_alpha['A']
+            coords_one = np.fromiter( chain.from_iterable(res["CA"].coord for res in chain_a), dtype = 'f8', count = -1).reshape((-1, 3))
+            points = Points(coords_one)
+            line_fit = Line.best_fit(points)
+            residuals = np.fromiter((line_fit.distance_point(point) for point in points), dtype = 'f8', count = -1)
+            rmse = np.sqrt((residuals*residuals).sum()/coords_one.shape[0])
+            rmse_list.append(rmse)
+            if i%500 == 0:
+                print(f'{i} read out of {len(files)}')
+        
+    fig = plt.figure(figsize = (12,18))
+    ax=fig.add_subplot(111)
+    ax = sns.histplot(rmse_list)
+    ax.set_xlabel('RMSE')
+    ax.set_ylabel('Counts')
+    ax.set_title('Distribution of RMSE-PLDDT>70')
+    
+    return rmse_list, seq_list
 #%%
 if __name__ == '__main__':
-    rmse_list, seq_list = main()
+    rmse_list, seq_list = downloaded()
     
+    with open("rmse_list", "wb") as fp:
+        pickle.dump(rmse_list, fp)
+
+    with open("seq_list", "wb") as fp:
+        pickle.dump(seq_list, fp)
+    
+    '''
     rmse_array = np.array(rmse_list)
     seq_array = np.array(seq_list)
     second_peak = seq_array[(rmse_array>2.0) & (rmse_array<2.44)]
@@ -102,5 +145,5 @@ if __name__ == '__main__':
     plt.xlabel('m/z')
     plt.ylabel(r'CCA ($A^2$)')
     plt.title('Scatter plot: CCA vs m/z')
-    plt.legend(*scatter.legend_elements(), title = 'Charges')
+    plt.legend(*scatter.legend_elements(), title = 'Charges')'''
 # %%
