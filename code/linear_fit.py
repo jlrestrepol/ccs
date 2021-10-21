@@ -89,8 +89,12 @@ def downloaded():
         if len(dirs) > 0:
             continue
         print(root)
-        for i, file in enumerate(files): 
-            structure_alpha = Bio.PDB.PDBParser().get_structure("alpha",root+'/'+file)
+        for i, file in enumerate(files):
+            try: 
+                structure_alpha = Bio.PDB.PDBParser().get_structure("alpha",root+'/'+file)
+            except Exception:
+                pass
+
             ppb=PPBuilder()
             seq = str([pp.get_sequence() for pp in ppb.build_peptides(structure_alpha)][0])
             seq_list.append(seq)
