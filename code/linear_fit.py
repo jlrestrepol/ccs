@@ -88,7 +88,8 @@ def downloaded():
     seq_list = []
     count_no_match = 0
     i = 0
-    for root,dirs,file in os.walk(combined_folder):
+    files = ['CAEEL.h5' ,'DROME.h5' ,'ECOLI.h5', 'HUMAN.h5', 'YEAST.h5']
+    for file in files:
         df = pd.read_hdf(combined_folder+file)
         df_filt = df[~df['Distance_matrix'].isna()]#Drop rows without distance matrix calculation
         organism = file[:file.find('.')]#Get the organism from file name
