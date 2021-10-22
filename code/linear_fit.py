@@ -99,10 +99,10 @@ def downloaded():
     for index, (label, prot_id) in enumerate(df_filt['Proteins'].items()):
         #Get the data from the .pdb file
         
-        file_path = alpha_folder+prot_id+suffix
+        file_path = alpha_folder+organism+'/AF-'+prot_id+suffix
         if not os.path.exists(file_path):#If protein name file is not present in Alpha Fold folder
             count_no_match += 1
-            print(seq_list[index], prot_id+' not found, total not found: '+str(count_no_match), 'index: '+str(index))
+            print(pep_list[index], prot_id+' not found, total not found: '+str(count_no_match), 'index: '+str(index))
             continue
 
         parser = Bio.PDB.PDBParser()# create parser
