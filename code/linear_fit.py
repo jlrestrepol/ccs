@@ -106,7 +106,7 @@ def downloaded():
             continue
 
         parser = Bio.PDB.PDBParser()# create parser
-        structure_alpha = parser.get_structure("alpha",alpha_folder+prot_id+suffix)#get structure
+        structure_alpha = parser.get_structure("alpha",file_path)#get structure
         model_alpha = structure_alpha[0]#get model
         chain_a = model_alpha['A']
         ppb=PPBuilder()#polypeptide builder
