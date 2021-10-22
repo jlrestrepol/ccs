@@ -121,7 +121,9 @@ def downloaded():
             
             #Get 3D coords of residuals of the whole protein
             coords_prot = np.fromiter( chain.from_iterable(res["CA"].coord for res in chain_a), dtype = 'f8', count = -1).reshape((-1, 3))
-            coords_one = coords_prot[start_index:final_index, :]#Extract coords of peptide                
+            coords_one = coords_prot[start_index:final_index, :]#Extract coords of peptide
+            if coords_one.shape[0] == 0:
+                print(f"Start index = {start_index}, Final index = {final_index}, coords_prot = {coords_prot.shape}")                
             #Perform the fit
             points = Points(coords_one)
             line_fit = Line.best_fit(points)
