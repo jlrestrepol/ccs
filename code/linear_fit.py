@@ -116,9 +116,12 @@ def downloaded():
             final_index = start_index + len(seq_pep)
             if start_index == -1:
                 print(f"Peptide {seq_pep} not found in {prot_id}")
+            if final_index == start_index:
+                print(f"Final index = start index, len of pep = {len(seq_pep)}")
+            
             #Get 3D coords of residuals of the whole protein
             coords_prot = np.fromiter( chain.from_iterable(res["CA"].coord for res in chain_a), dtype = 'f8', count = -1).reshape((-1, 3))
-            coords_one = coords_prot[start_index:final_index]#Extract coords of peptide                
+            coords_one = coords_prot[start_index:final_index, :]#Extract coords of peptide                
             #Perform the fit
             points = Points(coords_one)
             line_fit = Line.best_fit(points)
