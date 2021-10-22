@@ -95,39 +95,41 @@ def downloaded():
         organism = file[:file.find('.')]#Get the organism from file name
         pep_list = df_filt['Sequence'].values
 
+        for index, (label, prot_id) in enumerate(df_filt['Proteins'].items()):
+            #Get the data from the .pdb file
+            
+            file_path = alpha_folder+organism+'/AF-'+prot_id+suffix
+            if not os.path.exists(file_path):#If protein name file is not present in Alpha Fold folder
+                count_no_match += 1
+                print(pep_list[index], prot_id+' not found, total not found: '+str(count_no_match), 'index: '+str(index))
+                continue
 
-    for index, (label, prot_id) in enumerate(df_filt['Proteins'].items()):
-        #Get the data from the .pdb file
-        
-        file_path = alpha_folder+organism+'/AF-'+prot_id+suffix
-        if not os.path.exists(file_path):#If protein name file is not present in Alpha Fold folder
-            count_no_match += 1
-            print(pep_list[index], prot_id+' not found, total not found: '+str(count_no_match), 'index: '+str(index))
-            continue
-
-        parser = Bio.PDB.PDBParser()# create parser
-        structure_alpha = parser.get_structure("alpha",file_path)#get structure
-        model_alpha = structure_alpha[0]#get model
-        chain_a = model_alpha['A']
-        ppb=PPBuilder()#polypeptide builder
-        seq_prot = str([pp.get_sequence() for pp in ppb.build_peptides(structure_alpha)][0])#get seq of protein
-        seq_pep = pep_list[index]#get seq of peptide
-        #Find position of peptide in protein
-        start_index = seq_prot.find(seq_pep)
-        final_index = start_index + len(seq_pep)
-        #Get 3D coords of residuals of the whole protein
-        coords_prot = np.fromiter( chain.from_iterable(res["CA"].coord for res in chain_a), dtype = 'f8', count = -1).reshape((-1, 3))
-        coords_one = coords_prot[start_index:final_index]#Extract coords of peptide                
-        #Perform the fit
-        points = Points(coords_one)
-        line_fit = Line.best_fit(points)
-        residuals = np.fromiter((line_fit.distance_point(point) for point in points), dtype = 'f8', count = -1)
-        rmse = np.sqrt((residuals*residuals).sum()/coords_one.shape[0])
-        rmse_list.append(rmse)
-        seq_list.append(seq_pep)
-        if i%500 == 0:
-            print(f'{i} read out of {len(df_filt.shape)} in organism {organism}')
-        i += 1
+            parser = Bio.PDB.PDBParser()# create parser
+            structure_alpha = parser.get_structure("alpha",file_path)#get structure
+            model_alpha = structure_alpha[0]#get model
+            chain_a = model_alpha['A']
+            ppb=PPBuilder()#polypeptide builder
+            seq_prot = str([pp.get_sequence() for pp in ppb.build_peptides(structure_alpha)][0])#get seq of protein
+            seq_pep = pep_list[index]#get seq of peptide
+            #Find position of peptide in protein
+            start_index = seq_prot.find(seq_pep)
+            final_index = start_index + len(seq_pep)
+            if start_index == -1:
+                print(f"Peptide {seq_pep} not found in {prot_id}")
+            #Get 3D coords of residuals of the whole protein
+            coords_prot = np.fromiter( chain.from_iterable(res["CA"].coord for res in chain_a), dtype = 'f8', count = -1).reshape((-1, 3))
+            coords_one = coords_prot[start_index:final_index]#Extract coords of peptide                
+            #Perform the fit
+            points = Points(coords_one)
+            line_fit = Line.best_fit(points)
+            residuals = np.fromiter((line_fit.distance_point(point) for point in points), dtype = 'f8', count = -1)
+            rmse = np.sqrt((residuals*residuals).sum()/coords_one.shape[0])
+            rmse_list.append(rmse)
+            seq_list.append(seq_pep)
+            if i%500 == 0:
+                print(f'{i} read out of {df_filt.shape[0]} in organism {organism}')
+                print(f'Peptide {seq_pep} found in {prot_id} in pos {start_index}')
+            i += 1
     
     return rmse_list, seq_list
 #%%
