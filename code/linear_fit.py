@@ -70,7 +70,7 @@ def predicted():
                     rmse = np.sqrt((residuals*residuals).sum()/coords_one.shape[0])
                     rmse_list.append(rmse)
     
-    fig = plt.figure(figsize = (12,18))
+    fig = plt.figure(figsize = (6,8))
     ax=fig.add_subplot(111)
     ax = sns.histplot(rmse_list)
     ax.set_xlabel('RMSE')
