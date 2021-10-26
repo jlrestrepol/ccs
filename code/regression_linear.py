@@ -100,6 +100,38 @@ class LinearRegression():
             ax.set_ylabel('Count')
             ax.set_title(f'Charge {i+2}')
             i += 1
+    
+    def test_set_plot(self, df):
+        if 'Charge' not in df:
+            raise Exception('df doesnt contain charge')
+        if 'm/z' not in df:
+            raise Exception('df doesnt contain m/z')
+        if self.f_2(0) is None:
+            raise Exception('f_2 is not trained')
+        if self.f_3(0) is None:
+            raise Exception('f_3 is not trained')
+        if self.f_4(0) is None:
+            raise Exception('f_4 is not trained')
+
+        self.predict(df)
+
+        fig, ax = plt.subplots(nrows = 1, ncols = 2, figsize = (20, 6))
+        fig.suptitle('linear_ccs', fontsize = 12)
+        res_rel = (df['CCS']-df['linear_ccs'])/df['linear_ccs']*100
+        ax[0].hist(res_rel, bins = 50, label = f'MAD = {np.round(scipy.stats.median_abs_deviation(res_rel), 4)}')
+        ax[0].set_xlabel('Relative Error of CCS')
+        ax[0].set_ylabel('Counts')
+        ax[0].set_title('Relative error of CCS w.r.t Ground Truth')
+        ax[0].legend()
+
+        corr, _ = scipy.stats.pearsonr(df['linear_ccs'],df['CCS'])
+        ax[1].scatter(df['CCS'], df['linear_ccs'], label = f'Corr : {np.round(corr, 4)}', s = 0.1)
+        ax[1].set_xlabel('CCS')
+        ax[1].set_ylabel('Predicted CCS')
+        ax[1].set_title('Scatter Plot CCS vs predicted CCS')
+        ax[1].plot(np.arange(300,800), np.arange(300,800), 'b--')
+        ax[1].legend()
+
 #%%
 if __name__ == "__main__":
     # Load data in
@@ -108,6 +140,8 @@ if __name__ == "__main__":
     df4['m/z'] = df4.apply(lambda x: utils.calculate_mass(x['Modified_sequence'], x['Charge']), axis = 1)
     lr = LinearRegression()
     lr.fit(df)
-    lr.predict(df)  
-    lr.error_fit_plot(df)
+    lr.predict(df4)  
+    lr.error_fit_plot(df4)
+    lr.test_set_plot(df4)
+
 # %%
