@@ -102,9 +102,9 @@ def get_names(name):
     return model_name[name], data_name[name]
 
 
-def test_set_results():
+def test_set_results(name):
     '''Results on the complete test set'''
-    model, data = get_names('Tri-peptides')
+    model, data = get_names(name)
     prefix_models = '/mnt/pool-cox-data08/Juan/ccs/models/'
     xgb_ch2 = joblib.load(prefix_models+model+'/xgb_ch2')
     xgb_ch3 = joblib.load(prefix_models+model+'/xgb_ch3')
