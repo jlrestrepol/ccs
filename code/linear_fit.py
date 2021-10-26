@@ -146,37 +146,41 @@ if __name__ == '__main__':
 
     with open("seq_list.pkl", "wb") as fp:
         pickle.dump(seq_list, fp)
-    
-    '''
-    rmse_array = np.array(rmse_list)
-    seq_array = np.array(seq_list)
-    second_peak = seq_array[(rmse_array>2.0) & (rmse_array<2.44)]
 
-    df = pd.read_csv('../dl_paper/SourceData_Figure_1.csv')
-    seqs_fig1 = df['Modified sequence'].str.replace('_','')
-    set_af = set(seq_array)
-    set_exp = set(seqs_fig1)
-    inters = set_af.intersection(set_exp)
-    df['Modified sequence'] = seqs_fig1
-    df.set_index('Modified sequence', inplace = True)
-    df_inters = df.loc[list(inters)]
-    
-    fig = plt.figure(figsize = (12,18))
-    ax=fig.add_subplot(111)
-    fig.set_size_inches((16, 8))
-    scatter = plt.scatter(df['m/z'], df['CCS'], c = df['Charge'], s = 0.01)
-    scatter2 = plt.scatter(df_inters['m/z'], df_inters['CCS'], c = 'green', s = 5)
-    plt.xlabel('m/z')
-    plt.ylabel(r'CCA ($A^2$)')
-    plt.title('Scatter plot: CCA vs m/z')
-    plt.legend(*scatter.legend_elements(), title = 'Charges')
-    
-    fig = plt.figure(figsize = (12,18))
-    ax=fig.add_subplot(111)
-    ax = sns.histplot(rmse_list)
-    ax.set_xlabel('RMSE')
-    ax.set_ylabel('Counts')
-    ax.set_title('Distribution of RMSE-PLDDT>70')
-    
-    '''
+#%%    
+rmse_list = pd.read_pickle('rmse_list.pkl')    
+seq_list = pd.read_pickle('seq_list.pkl')
+rmse_array = np.array(rmse_list)
+seq_array = np.array(seq_list)
+second_peak = seq_array[(rmse_array>2.07) & (rmse_array<2.404)]
+fig = plt.figure(figsize = (8,6))
+ax=fig.add_subplot(111)
+ax.hist(rmse_list, bins =50)
+ax.set_xlabel('RMSE')
+ax.set_ylabel('Counts')
+ax.set_title('Distribution of RMSE-PLDDT>70')
+
+
+#%%
+df = pd.read_csv('../dl_paper/SourceData_Figure_1.csv')
+seqs_fig1 = df['Modified sequence'].str.replace('_','')
+df['Modified sequence'] = seqs_fig1
+set_af = set(second_peak)
+set_exp = set(seqs_fig1)
+inters = set_af.intersection(set_exp)
+df.set_index('Modified sequence', inplace = True)
+df_inters = df.loc[list(inters)]
+#%%
+fig = plt.figure(figsize = (12,18))
+ax=fig.add_subplot(111)
+fig.set_size_inches((16, 8))
+scatter = plt.scatter(df['m/z'], df['CCS'], c = df['Charge'], s = 0.01)
+scatter2 = plt.scatter(df_inters['m/z'], df_inters['CCS'], c = 'green', s = 0.1)
+plt.xlabel('m/z')
+plt.ylabel(r'CCA ($A^2$)')
+plt.title('Scatter plot: CCA vs m/z')
+plt.legend(*scatter.legend_elements(), title = 'Charges')
+
+
+
 # %%
