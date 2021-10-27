@@ -2,7 +2,7 @@
 import numpy as np
 import pandas as pd
 import sklearn as sk
-from sklearn.svm import SVR
+from sklearn.svm import SVR, LinearSVR
 from sklearn import model_selection
 from sklearn.ensemble import BaggingRegressor
 from sklearnex import patch_sklearn
@@ -55,10 +55,10 @@ def get_names(name):
 #%%
 def test_set_results():
     '''Results on the complete test set'''
-    #prefix_models = '/mnt/pool-cox-data08/Juan/ccs/models/'
-    #model_name = 'svr_count'
-    prefix_models = ''
-    model_name = '.'
+    prefix_models = '/mnt/pool-cox-data08/Juan/ccs/models/'
+    model_name = 'svr_count'
+    #prefix_models = ''
+    #model_name = '.'
     svr_ch2 = joblib.load(prefix_models+model_name+'/svr_ch2')
     svr_ch3 = joblib.load(prefix_models+model_name+'/svr_ch3')
     svr_ch4 = joblib.load(prefix_models+model_name+'/svr_ch4')
@@ -134,7 +134,8 @@ def train(charge, name, save = False):
     print('Starting Training')
     start = time.time()
     n_estimators = 10
-    regr = BaggingRegressor(base_estimator=SVR(), n_estimators=n_estimators, random_state=0, n_jobs=-1, max_samples= 1.0/n_estimators)
+    regr = BaggingRegressor(base_estimator=LinearSVR(dual =False, loss='squared_epsilon_insensitive'), n_estimators=n_estimators, 
+    random_state=0, n_jobs=-1, max_samples= 1.0/n_estimators, verbose = 1)
     regr.fit(x_train, y_train)
     end = time.time()
     print(end-start)
@@ -149,4 +150,5 @@ regr3 = train(3, 'Di-peptides',save = True)
 # %%
 regr4 = train(4, 'Di-peptides',save = True)
 # %%
-test_set_one_charge_results(regr2, charge = 2, scaler = None)
+test_set_results()
+# %%
