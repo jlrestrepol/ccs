@@ -136,6 +136,17 @@ def test_set_results(name):
     ax[1].plot(np.arange(300,800), np.arange(300,800), 'b--')
     ax[1].legend()
 
+    fig, ax = plt.subplots(nrows=1, ncols=3, figsize=(18,6))
+    i = 0
+    for ax, df_it in zip(ax, [df_fig4[df_fig4['Charge']==2], df_fig4[df_fig4['Charge']==3], df_fig4[df_fig4['Charge']==4]]):
+        res_rel = (df_it['CCS']-df_it['xgboost'])/df_it['xgboost']*100
+        sns.histplot(res_rel, ax = ax, label = f'MAD = {np.round(scipy.stats.median_abs_deviation(res_rel), 4)}')
+        ax.set_xlabel('Residual %')
+        ax.set_ylabel('Count')
+        ax.set_title(f'Charge {i+2}')
+        ax.legend()
+        i += 1
+
 
 def bayessian_opt(charge):
 

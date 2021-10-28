@@ -5,6 +5,7 @@ import scipy.optimize
 import matplotlib.pyplot as plt
 import seaborn as sns
 import utils
+import scipy
 #%%
 class LinearRegression():
     def  __init__(self) -> None:
@@ -131,6 +132,17 @@ class LinearRegression():
         ax[1].set_title('Scatter Plot CCS vs predicted CCS')
         ax[1].plot(np.arange(300,800), np.arange(300,800), 'b--')
         ax[1].legend()
+
+        fig, ax = plt.subplots(nrows=1, ncols=3, figsize=(18,6))
+        i = 0
+        for ax, df_it in zip(ax, [df[df['Charge']==2], df[df['Charge']==3], df[df['Charge']==4]]):
+            res_rel = (df_it['CCS']-df_it['linear_ccs'])/df_it['linear_ccs']*100
+            sns.histplot(res_rel, ax = ax, label = f'MAD = {np.round(scipy.stats.median_abs_deviation(res_rel), 4)}')
+            ax.set_xlabel('Residual %')
+            ax.set_ylabel('Count')
+            ax.set_title(f'Charge {i+2}')
+            ax.legend()
+            i += 1
 
 #%%
 if __name__ == "__main__":
