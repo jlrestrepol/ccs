@@ -44,28 +44,26 @@ def train_test_set(charge, name):
 def get_names(name):
     """Returns file name of tuple model file and data file"""
 
-    model_name = {'One hot encoded':'xgboost_ohe', 'Counts':'xgboost_count',
-    'Di-peptides':'xgboost_dip', 'Tri-peptides' : 'xgboost_trip',
-    'Extended':'xgboost_extended', 'Dip-hel':'xgboost_dip_hel'}
-    data_name = {'One hot encoded':'one_hot_encoded_fig1.npy',
-    'Counts':'counts_fig1.npy', 'Di-peptides':'dipeptide_fig1.npy', 
-    'Tri-peptides' : 'tripeptides_fig1.npy',
-    'Extended':'extended_fig1.npy', 'Dip-hel':'dip_hel_fig1.npy'}
+    model_name = {'Counts':'svr_count', 'Di-peptides':'svr_dip',
+    'Extended':'svr_extended', 'Dip-hel':'svr_dip_hel'}
+    data_name = {'One hot encoded':'one_hot_encoded_fig4.npy',
+    'Counts':'counts_fig4.npy', 'Di-peptides':'dipeptide_fig4.npy', 
+    'Tri-peptides' : 'tripeptides_fig4.npy',
+    'Extended':'extended_fig4.npy', 'Dip-hel':'dip_hel_fig4.npy'}
     return model_name[name], data_name[name]
 #%%
-def test_set_results():
+def test_set_results(name):
     '''Results on the complete test set'''
+    model_name, data_name = get_names(name)
     prefix_models = '/mnt/pool-cox-data08/Juan/ccs/models/'
-    model_name = 'svr_count'
     #prefix_models = ''
     #model_name = '.'
     svr_ch2 = joblib.load(prefix_models+model_name+'/svr_ch2')
     svr_ch3 = joblib.load(prefix_models+model_name+'/svr_ch3')
     svr_ch4 = joblib.load(prefix_models+model_name+'/svr_ch4')
-    data = 'counts_fig4.npy'
     prefix_data = '/mnt/pool-cox-data08/Juan/ccs/Data/'
     df_fig4 = pd.read_pickle('../Data/Fig4_powerlaw.pkl')
-    features_fig4 = np.load(prefix_data+data, allow_pickle=True)
+    features_fig4 = np.load(prefix_data+data_name, allow_pickle=True)
     #features_fig4 = scaler.transform(features_fig4)
     print('Predicting')
     df_fig4['svr'] = 0
@@ -143,12 +141,13 @@ def train(charge, name, save = False):
         prefix_models = f'svr_ch{charge}'
         joblib.dump(regr, prefix_models)
     return regr
-# %%
-regr2 = train(2, 'Di-peptides', save = True)
-# %%
-regr3 = train(3, 'Di-peptides',save = True)
-# %%
-regr4 = train(4, 'Di-peptides',save = True)
-# %%
-test_set_results()
-# %%
+if __name__ == "__main__":
+    # %%
+    regr2 = train(2, 'Di-peptides', save = True)
+    # %%
+    regr3 = train(3, 'Di-peptides',save = True)
+    # %%
+    regr4 = train(4, 'Di-peptides',save = True)
+    # %%
+    test_set_results()
+    # %%
