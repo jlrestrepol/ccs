@@ -89,6 +89,8 @@ def test_set_results(name):
     ax[1].set_title('Scatter Plot CCS vs predicted CCS')
     ax[1].plot(np.arange(300,800), np.arange(300,800), 'b--')
     ax[1].legend()
+
+    return df_fig4['svr']
 # %%
 def test_set_one_charge_results(model, charge, scaler):
     '''Plots results on the test set'''
