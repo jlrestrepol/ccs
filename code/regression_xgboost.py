@@ -102,9 +102,9 @@ def get_names(name):
     return model_name[name], data_name[name]
 
 
-def test_set_results():
+def test_set_results(name):
     '''Results on the complete test set'''
-    model, data = get_names('Tri-peptides')
+    model, data = get_names(name)
     prefix_models = '/mnt/pool-cox-data08/Juan/ccs/models/'
     xgb_ch2 = joblib.load(prefix_models+model+'/xgb_ch2')
     xgb_ch3 = joblib.load(prefix_models+model+'/xgb_ch3')
@@ -135,6 +135,17 @@ def test_set_results():
     ax[1].set_title('Scatter Plot CCS vs predicted CCS')
     ax[1].plot(np.arange(300,800), np.arange(300,800), 'b--')
     ax[1].legend()
+
+    fig, ax = plt.subplots(nrows=1, ncols=3, figsize=(18,6))
+    i = 0
+    for ax, df_it in zip(ax, [df_fig4[df_fig4['Charge']==2], df_fig4[df_fig4['Charge']==3], df_fig4[df_fig4['Charge']==4]]):
+        res_rel = (df_it['CCS']-df_it['xgboost'])/df_it['xgboost']*100
+        sns.histplot(res_rel, ax = ax, label = f'MAD = {np.round(scipy.stats.median_abs_deviation(res_rel), 4)}')
+        ax.set_xlabel('Residual %')
+        ax.set_ylabel('Count')
+        ax.set_title(f'Charge {i+2}')
+        ax.legend()
+        i += 1
 
 
 def bayessian_opt(charge):
