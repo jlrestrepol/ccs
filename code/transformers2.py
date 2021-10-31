@@ -1,22 +1,13 @@
 #%%
-import collections
 import logging
-import os
-import pathlib
-import re
-import string
-import sys
 import time
 import pandas as pd
 from sklearn import model_selection
 import sklearn as sk
-import numpy as np
 import matplotlib.pyplot as plt
-
+import numpy as np
 #import tensorflow_text as text
 import tensorflow as tf
-from tensorflow import keras
-from tensorflow.python.ops.gen_array_ops import Transpose
 # %%
 logging.getLogger('tensorflow').setLevel(logging.ERROR)  # suppress warnings
 #%%
@@ -35,7 +26,7 @@ def train_val_set(charge = np.nan):
     del features
     del label
     return np.array(x_train), np.array(x_test), np.array(y_train), np.array(y_test)
-# %%
+#%%
 def get_angles(pos, i, d_model):
   angle_rates = 1 / np.power(10000, (2 * (i//2)) / np.float32(d_model))
   return pos * angle_rates
@@ -103,52 +94,62 @@ def scaled_dot_product_attention(q, k, v, mask = None):
   return output
 # %%
 class MultiHeadAttention(tf.keras.layers.Layer):
-  def __init__(self, d_model, num_heads):
+  def __init__(self, d_model = 512, num_heads = 8, causal=False, dropout=0.0):
     super(MultiHeadAttention, self).__init__()
-    self.num_heads = num_heads
-    self.d_model = d_model
 
-    assert d_model % self.num_heads == 0
+    assert int(d_model) % int(num_heads) == 0
+    depth = d_model // num_heads
 
-    self.depth = d_model // self.num_heads
+    self.w_query = tf.keras.layers.Dense(d_model)
+    self.split_reshape_query = tf.keras.layers.Reshape((-1,num_heads,depth))  
+    self.split_permute_query = tf.keras.layers.Permute((2,1,3))      
 
-    self.wq = tf.keras.layers.Dense(d_model)
-    self.wk = tf.keras.layers.Dense(d_model)
-    self.wv = tf.keras.layers.Dense(d_model)
+    self.w_value = tf.keras.layers.Dense(d_model)
+    self.split_reshape_value = tf.keras.layers.Reshape((-1,num_heads,depth))
+    self.split_permute_value = tf.keras.layers.Permute((2,1,3))
+
+    self.w_key = tf.keras.layers.Dense(d_model)
+    self.split_reshape_key = tf.keras.layers.Reshape((-1,num_heads,depth))
+    self.split_permute_key = tf.keras.layers.Permute((2,1,3))
+
+    self.attention = tf.keras.layers.Attention(causal=causal, dropout=dropout)
+    self.join_permute_attention = tf.keras.layers.Permute((2,1,3))
+    self.join_reshape_attention = tf.keras.layers.Reshape((-1,d_model))
 
     self.dense = tf.keras.layers.Dense(d_model)
 
-  def split_heads(self, x, batch_size):
-    """Split the last dimension into (num_heads, depth).
-    Transpose the result such that the shape is (batch_size, num_heads, seq_len, depth)
-    """
-    x = tf.reshape(x, (batch_size, -1, self.num_heads, self.depth))
-    return tf.transpose(x, perm=[0, 2, 1, 3])
+  def call(self, inputs, mask=None, training=None):
+    q = inputs[0]
+    v = inputs[1]
+    k = inputs[2] if len(inputs) > 2 else v
 
-  def call(self, v, k, q, mask = None):
-    batch_size = tf.shape(q)[0]
+    query = self.w_query(q)
+    query = self.split_reshape_query(query)    
+    query = self.split_permute_query(query)                 
 
-    q = self.wq(q)  # (batch_size, seq_len, d_model)
-    k = self.wk(k)  # (batch_size, seq_len, d_model)
-    v = self.wv(v)  # (batch_size, seq_len, d_model)
+    value = self.w_value(v)
+    value = self.split_reshape_value(value)
+    value = self.split_permute_value(value)
 
-    q = self.split_heads(q, batch_size)  # (batch_size, num_heads, seq_len_q, depth)
-    k = self.split_heads(k, batch_size)  # (batch_size, num_heads, seq_len_k, depth)
-    v = self.split_heads(v, batch_size)  # (batch_size, num_heads, seq_len_v, depth)
+    key = self.w_key(k)
+    key = self.split_reshape_key(key)
+    key = self.split_permute_key(key)
 
-    # scaled_attention.shape == (batch_size, num_heads, seq_len_q, depth)
-    # attention_weights.shape == (batch_size, num_heads, seq_len_q, seq_len_k)
-    scaled_attention = scaled_dot_product_attention(
-        q, k, v, mask)
+    if mask is not None:
+      if mask[0] is not None:
+        mask[0] = tf.keras.layers.Reshape((-1,1))(mask[0])
+        mask[0] = tf.keras.layers.Permute((2,1))(mask[0])
+      if mask[1] is not None:
+        mask[1] = tf.keras.layers.Reshape((-1,1))(mask[1])
+        mask[1] = tf.keras.layers.Permute((2,1))(mask[1])
 
-    scaled_attention = tf.transpose(scaled_attention, perm=[0, 2, 1, 3])  # (batch_size, seq_len_q, num_heads, depth)
+    attention = self.attention([query, value, key], mask=mask)
+    attention = self.join_permute_attention(attention)
+    attention = self.join_reshape_attention(attention)
 
-    concat_attention = tf.reshape(scaled_attention,
-                                  (batch_size, -1, self.d_model))  # (batch_size, seq_len_q, d_model)
+    x = self.dense(attention)
 
-    output = self.dense(concat_attention)  # (batch_size, seq_len_q, d_model)
-
-    return output
+    return x
 # %%
 def point_wise_feed_forward_network(d_model, dff):
   return tf.keras.Sequential([
@@ -157,69 +158,75 @@ def point_wise_feed_forward_network(d_model, dff):
   ])
 # %%
 class EncoderLayer(tf.keras.layers.Layer):
-  def __init__(self, d_model, num_heads, dff, rate=0.1):
+  def __init__(self,  d_model = 512, num_heads = 8, dff = 2048, dropout = 0.0):
     super(EncoderLayer, self).__init__()
 
-    self.mha = MultiHeadAttention(d_model, num_heads)
-    self.ffn = point_wise_feed_forward_network(d_model, dff)
+    self.multi_head_attention =  MultiHeadAttention(d_model, num_heads)
+    self.dropout_attention = tf.keras.layers.Dropout(dropout)
+    self.add_attention = tf.keras.layers.Add()
+    self.layer_norm_attention = tf.keras.layers.LayerNormalization(epsilon=1e-6)
 
-    self.layernorm1 = tf.keras.layers.LayerNormalization(epsilon=1e-6)
-    self.layernorm2 = tf.keras.layers.LayerNormalization(epsilon=1e-6)
+    self.dense1 = tf.keras.layers.Dense(dff, activation='relu')
+    self.dense2 = tf.keras.layers.Dense(d_model)
+    self.dropout_dense = tf.keras.layers.Dropout(dropout)
+    self.add_dense = tf.keras.layers.Add()
+    self.layer_norm_dense = tf.keras.layers.LayerNormalization(epsilon=1e-6)
 
-    self.dropout1 = tf.keras.layers.Dropout(rate)
-    self.dropout2 = tf.keras.layers.Dropout(rate)
+  def call(self, inputs, mask=None, training=None):
+    # print(mask)
+    attention = self.multi_head_attention([inputs,inputs,inputs], mask = [mask,mask])
+    attention = self.dropout_attention(attention, training = training)
+    x = self.add_attention([inputs , attention])
+    x = self.layer_norm_attention(x)
+    # x = inputs
 
-  def call(self, x, training, mask):
+    ## Feed Forward
+    dense = self.dense1(x)
+    dense = self.dense2(dense)
+    dense = self.dropout_dense(dense, training = training)
+    x = self.add_dense([x , dense])
+    x = self.layer_norm_dense(x)
 
-    attn_output, _ = self.mha(x, x, x, mask)  # (batch_size, input_seq_len, d_model)
-    attn_output = self.dropout1(attn_output, training=training)
-    out1 = self.layernorm1(x + attn_output)  # (batch_size, input_seq_len, d_model)
-
-    ffn_output = self.ffn(out1)  # (batch_size, input_seq_len, d_model)
-    ffn_output = self.dropout2(ffn_output, training=training)
-    out2 = self.layernorm2(out1 + ffn_output)  # (batch_size, input_seq_len, d_model)
-
-    return out2
+    return x
 
 # %%
 class Encoder(tf.keras.layers.Layer):
-  def __init__(self, num_layers, d_model, num_heads, dff, input_vocab_size,
-               maximum_position_encoding, rate=0.1):
+  def __init__(self, input_vocab_size, num_layers = 4, d_model = 512, num_heads = 8, dff = 2048, maximum_position_encoding = 10000, dropout = 0.0):
     super(Encoder, self).__init__()
 
     self.d_model = d_model
-    self.num_layers = num_layers
 
-    self.embedding = tf.keras.layers.Embedding(input_vocab_size, d_model)
-    self.pos_encoding = positional_encoding(maximum_position_encoding,
-                                            self.d_model)
+    self.embedding = tf.keras.layers.Embedding(input_vocab_size, d_model, mask_zero=True)
+    self.pos = positional_encoding(maximum_position_encoding, d_model)
 
-    self.enc_layers = [EncoderLayer(d_model, num_heads, dff, rate)
-                       for _ in range(num_layers)]
+    self.encoder_layers = [ EncoderLayer(d_model = d_model, num_heads = num_heads, dff = dff, dropout = dropout) for _ in range(num_layers)]
 
-    self.dropout = tf.keras.layers.Dropout(rate)
+    self.dropout = tf.keras.layers.Dropout(dropout)
 
-  def call(self, x, training, mask=None):
-
-    seq_len = tf.shape(x)[1]
-
-    # adding embedding and position encoding.
-    x = self.embedding(x)  # (batch_size, input_seq_len, d_model)
-    x *= tf.math.sqrt(tf.cast(self.d_model, tf.float32))
-    x += self.pos_encoding[:, :seq_len, :]
+  def call(self, inputs, mask=None, training=None):
+    x = self.embedding(inputs)
+    # positional encoding
+    x *= tf.math.sqrt(tf.cast(self.d_model, tf.float32))  # scaling by the sqrt of d_model, not sure why or if needed??
+    x += self.pos[: , :tf.shape(x)[1], :]
 
     x = self.dropout(x, training=training)
 
-    for i in range(self.num_layers):
-      x = self.enc_layers[i](x, training, mask)
+    #Encoder layer
+    embedding_mask = self.embedding.compute_mask(inputs)
+    for encoder_layer in self.encoder_layers:
+      x = encoder_layer(x, mask = embedding_mask)
 
-    return x  # (batch_size, input_seq_len, d_model)
+    return x
+
+  def compute_mask(self, inputs, mask=None):
+    return self.embedding.compute_mask(inputs)
 
 # %%
 class Transformer(tf.keras.Model):
   def __init__(self, num_layers, d_model, num_heads, dff, input_vocab_size,
                pe_input, rate=0.1):
     super().__init__()
+    print( d_model % num_heads == 0)
     self.encoder = Encoder(num_layers, d_model, num_heads, dff,
                              input_vocab_size, pe_input, rate)
 
@@ -273,19 +280,67 @@ class CustomSchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
     arg2 = step * (self.warmup_steps ** -1.5)
 
     return tf.math.rsqrt(self.d_model) * tf.math.minimum(arg1, arg2)
-# %%
-num_layers = 2
+
+#%%
+num_layers = 4
 d_model = 128
 dff = 512
 num_heads = 8
 dropout_rate = 0.1
-# %%
-learning_rate = CustomSchedule(d_model)
+input_vocab_size = 200
+target_vocab_size = 2
+#%%
+x_train, x_test, y_train, y_test = train_val_set(charge = 2)
+#%%
+input = tf.keras.layers.Input(shape=(None,))
+target = tf.keras.layers.Input(shape=(None,))
 
-optimizer = tf.keras.optimizers.Adam(learning_rate, beta_1=0.9, beta_2=0.98,
+model = Transformer(num_layers=num_layers, d_model=d_model, num_heads=num_heads,
+dff=dff, input_vocab_size=27, pe_input=26, rate=0.1)
+
+#%%
+input = tf.keras.layers.Input(shape=(None,))
+target = tf.keras.layers.Input(shape=(None,))
+encoder = Encoder(input_vocab_size, num_layers = num_layers, d_model = d_model, num_heads = num_heads, dff = dff, dropout = dropout_rate)
+#decoder = Decoder(target_vocab_size, num_layers = num_layers, d_model = d_model, num_heads = num_heads, dff = dff, dropout = dropout_rate)
+
+x = encoder(input)
+x = tf.keras.layers.GlobalAveragePooling1D()(x)
+x = tf.keras.layers.Dropout(0.1)(x)
+x = tf.keras.layers.Dense(20, activation="relu")(x)
+x = tf.keras.layers.Dropout(0.1)(x)
+x = tf.keras.layers.Dense(1)(x)
+print(x.shape)
+
+model = tf.keras.models.Model(inputs=input, outputs=x)
+model.summary()
+#%%
+optimizer = tf.keras.optimizers.Adam(CustomSchedule(d_model), beta_1=0.9, beta_2=0.98, 
                                      epsilon=1e-9)
-# %%
-loss_object = tf.keras.losses.MeanSquaredError(reduction='none')
+
+model.compile(optimizer=optimizer, loss = 'mean_squared_error') # masked_
+#%%
+folder = f'../models/transformer_ch2/'
+cb = [tf.keras.callbacks.CSVLogger(folder+'training.log', append=False),  
+        tf.keras.callbacks.ModelCheckpoint(folder+'checkpoints/best', save_best_only=True)]
+
+history = model.fit(
+    x_train, y_train, batch_size=64, epochs=30, validation_data=(x_test, y_test), callbacks=cb
+)
+#%%
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 def loss_function(real, pred):
   mask = tf.math.logical_not(tf.math.equal(real, 22))
@@ -297,117 +352,5 @@ def loss_function(real, pred):
   return tf.reduce_sum(loss_)/tf.reduce_sum(mask)
 
 train_loss = tf.keras.metrics.MeanSquaredError(name='train_loss')
-# %%
-folder = f'../models/transformer_ch2/'
-cb = [tf.keras.callbacks.CSVLogger(folder+'training.log', append=False),  
-        tf.keras.callbacks.ModelCheckpoint(folder+'checkpoints/best', save_best_only=True)]
 
 # %%
-'''
-# The @tf.function trace-compiles train_step into a TF graph for faster
-# execution. The function specializes to the precise shape of the argument
-# tensors. To avoid re-tracing due to the variable sequence lengths or variable
-# batch sizes (the last batch is smaller), use input_signature to specify
-# more generic shapes.
-
-train_step_signature = [
-    tf.TensorSpec(shape=(None, None), dtype=tf.int64),
-    tf.TensorSpec(shape=(None, None), dtype=tf.int64),
-]
-
-@tf.function(input_signature=train_step_signature)
-def train_step(inp, tar):
-  tar_inp = tar[:, :-1]
-  tar_real = tar[:, 1:]
-
-  with tf.GradientTape() as tape:
-    predictions, _ = transformer([inp, tar_inp],
-                                 training = True)
-    loss = loss_function(tar_real, predictions)
-
-  gradients = tape.gradient(loss, transformer.trainable_variables)
-  optimizer.apply_gradients(zip(gradients, transformer.trainable_variables))
-
-  train_loss(loss)'''
-# %%
-x_train, x_test, y_train, y_test = train_val_set(charge = 2)
-#%%
-embed_dim = x_train.shape[1]
-inputs = tf.keras.layers.Input(shape=(embed_dim,))
-encoder = Encoder(num_layers=num_layers, d_model=d_model, num_heads=num_heads, dff=dff,
-input_vocab_size=27, maximum_position_encoding=26, rate=0.1)
-x = encoder(inputs)
-x = tf.keras.layers.GlobalAveragePooling1D()(x)
-x = tf.keras.layers.Dropout(0.1)(x)
-x = tf.keras.layers.Dense(20, activation="relu")(x)
-x = tf.keras.layers.Dropout(0.1)(x)
-outputs = tf.keras.layers.Dense(1)(x)
-model = keras.Model(inputs=inputs, outputs=outputs)
-#%%
-
-
-
-# %%
-model = Transformer(num_layers=num_layers, d_model=d_model, num_heads=num_heads, dff=dff,
-    input_vocab_size=27, pe_input=26, rate=dropout_rate)
-# %%
-model.compile(loss=loss_object, optimizer=optimizer)
-history = model.fit(
-    x_train, y_train, batch_size=64, epochs=30, validation_data=(x_test, y_test), callbacks=cb
-)
-
-# %%
-def make_batches(ds):
-  return (
-      ds
-      .cache()
-      .shuffle(BUFFER_SIZE)
-      .batch(BATCH_SIZE)
-      .map(tokenize_pairs, num_parallel_calls=tf.data.AUTOTUNE)
-      .prefetch(tf.data.AUTOTUNE))
-# %%
-BUFFER_SIZE = 20000
-BATCH_SIZE = 64
-# %%
-make_batches(x_train)
-# %%
-num_layers = 4
-d_model = 128
-dff = 512
-num_heads = 8
-dropout_rate = 0.1
-
-# Size of input vocab plus start and end tokens
-input_vocab_size = 27
-
-input = tf.keras.layers.Input(shape=(None,))
-target = tf.keras.layers.Input(shape=(None,))
-
-encoder = Encoder( num_layers = num_layers, d_model = d_model, num_heads = num_heads, dff = dff,
-input_vocab_size=27, maximum_position_encoding=26, rate = dropout_rate)
-
-x = encoder(input)
-x = tf.keras.layers.Dense(1)(x)
-
-model = tf.keras.models.Model(inputs=[input, target], outputs=x)
-
-model.summary()
-#%%
-learning_rate = CustomSchedule(d_model)
-
-optimizer = tf.keras.optimizers.Adam(learning_rate, beta_1=0.9, beta_2=0.98,
-                                     epsilon=1e-9)
-loss_object = tf.keras.losses.MeanSquaredError(reduction='none')
-model.compile(loss=loss_object, optimizer=optimizer)
-#%%
-x_train, x_test, y_train, y_test = train_val_set(charge = 2)
-folder = f'../models/transformer_ch2/'
-cb = [tf.keras.callbacks.CSVLogger(folder+'training.log', append=False),  
-        tf.keras.callbacks.ModelCheckpoint(folder+'checkpoints/best', save_best_only=True)]
-# %%
-history = model.fit(
-    (x_train, x_train), (x_train, x_train),
-     batch_size=64, epochs=30, validation_data=(x_test, y_test), callbacks=cb
-)
-# %%
-
