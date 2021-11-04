@@ -17,8 +17,8 @@ print('Found GPU at: {}'.format(device_name))
 #%%
 def train_val_set(charge = np.nan):
     """Function that outputs train and validation set for a given charge state"""
-    fig1 = pd.read_pickle('Y:\Juan\ccs\Data\Fig1_powerlaw.pkl')#loads in raw training data
-    features_complete = np.load('Y:\Juan\ccs\Data\one_hot_encoded_fig1.npy', allow_pickle=True)#load in one-hot-encoded training data
+    fig1 = pd.read_pickle('/mnt/pool-cox-data08/Juan/ccs/Data/Fig1_powerlaw.pkl')#loads in raw training data
+    features_complete = np.load('/mnt/pool-cox-data08/Juan/ccs/Data/one_hot_encoded_fig1.npy', allow_pickle=True)#load in one-hot-encoded training data
     label_complete = (fig1['CCS'] - fig1['predicted_ccs']).values#residual
     features = features_complete[features_complete[:,-1] == charge][:,:-1]#choose points with given charge, drop charge feature because of 2 heads
     label = label_complete[features_complete[:,-1] == charge]#choose appropiate residuals
@@ -212,15 +212,15 @@ class CustomSchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
 #%%
 def test_set_results():
     '''Results on the complete test set'''
-    prefix =  'Y:\\Juan\\ccs\\models\\transformer'
+    prefix =  '/mnt/pool-cox-data08/Juan/ccs/models/transformer'
     model_ch2, _ = architecture()
-    model_ch2.load_weights(prefix+'_ch2\\checkpoints\\best')
+    model_ch2.load_weights(prefix+'_ch2/checkpoints/best')
     model_ch3, _ = architecture()
-    model_ch3.load_weights(prefix+'_ch3\\checkpoints\\best')
+    model_ch3.load_weights(prefix+'_ch3/checkpoints/best')
     model_ch4, _ = architecture()
-    model_ch4.load_weights(prefix+'_ch4\\checkpoints\\best')
+    model_ch4.load_weights(prefix+'_ch4/checkpoints/best')
 
-    prefix = 'Y:\\Juan\\ccs\\Data\\'
+    prefix = '/mnt/pool-cox-data08/Juan/ccs/Data/'
     df_fig4 = pd.read_pickle(prefix+'Fig4_powerlaw.pkl')
     features_fig4 = np.load(prefix+'one_hot_encoded_fig4.npy', allow_pickle=True)
 
