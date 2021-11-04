@@ -8,17 +8,24 @@ import matplotlib.pyplot as plt
 import numpy as np
 #import tensorflow_text as text
 import tensorflow as tf
-# %%
+#%%
 logging.getLogger('tensorflow').setLevel(logging.ERROR)  # suppress warnings
+device_name = tf.test.gpu_device_name()
+if device_name != '/device:GPU:0':
+  raise SystemError('GPU device not found')
+print('Found GPU at: {}'.format(device_name))
 #%%
 def train_val_set(charge = np.nan):
     """Function that outputs train and validation set for a given charge state"""
-    fig1 = pd.read_pickle('../Data/Fig1_powerlaw.pkl')#loads in raw training data
-    features_complete = np.load('/mnt/pool-cox-data08/Juan/ccs/Data/encoded_fig1.npy', allow_pickle=True)#load in one-hot-encoded training data
+    fig1 = pd.read_pickle('Y:\Juan\ccs\Data\Fig1_powerlaw.pkl')#loads in raw training data
+    features_complete = np.load('Y:\Juan\ccs\Data\one_hot_encoded_fig1.npy', allow_pickle=True)#load in one-hot-encoded training data
     label_complete = (fig1['CCS'] - fig1['predicted_ccs']).values#residual
     features = features_complete[features_complete[:,-1] == charge][:,:-1]#choose points with given charge, drop charge feature because of 2 heads
     label = label_complete[features_complete[:,-1] == charge]#choose appropiate residuals
     x_train, x_test, y_train, y_test = model_selection.train_test_split(features, label, test_size = 0.1, random_state=42)#train/val set split
+    index = np.random.choice(x_train.shape[0], size = 150000, replace = False) #subsample
+    x_train = x_train[index,:]
+    y_train = y_train[index]
     print(f"The Initial Mean Squared Error is: {sk.metrics.mean_squared_error(fig1['CCS'], fig1['predicted_ccs'])}")#prints initial error
     del fig1
     del features_complete
@@ -212,8 +219,6 @@ dropout_rate = 0.1
 input_vocab_size = 27+1
 target_vocab_size = 1
 #%%
-x_train, x_test, y_train, y_test = train_val_set(charge = 2)
-#%%
 input = tf.keras.layers.Input(shape=(None,))
 target = tf.keras.layers.Input(shape=(None,))
 encoder = Encoder(input_vocab_size, num_layers = num_layers, d_model = d_model, num_heads = num_heads, dff = dff, dropout = dropout_rate)
@@ -248,12 +253,16 @@ optimizer = tf.keras.optimizers.Adam(CustomSchedule(d_model), beta_1=0.9, beta_2
 
 model.compile(optimizer=optimizer, loss = loss, metrics = metrics) # masked_
 #%%
-folder = f'../models/transformer_ch4/'
-cb = [tf.keras.callbacks.CSVLogger(folder+'training.log', append=False),  
-        tf.keras.callbacks.ModelCheckpoint(folder+'checkpoints/best', save_best_only=True, 
+charge = 2
+x_train, x_test, y_train, y_test = train_val_set(charge = charge)
+#%%
+#folder = f'Y:\\Juan\\ccs\\models\\transformer_ch{charge}'
+folder = f'..\\models\\transformer_ch{charge}'
+cb = [tf.keras.callbacks.CSVLogger(folder+'\\training.log', append=False),  
+        tf.keras.callbacks.ModelCheckpoint(folder+'\\checkpoints\\best', save_best_only=True, 
         save_weights_only = True)]
 
 history = model.fit(
-    x_train, y_train, batch_size=64, epochs=30, validation_data=(x_test, y_test), callbacks=cb
+    x_train, y_train, batch_size=8, epochs=30, validation_data=(x_test, y_test), callbacks=cb
 )
 # %%
