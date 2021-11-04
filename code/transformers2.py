@@ -209,31 +209,70 @@ class CustomSchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
 
      }
     return config
-
 #%%
-num_layers = 4
-d_model = 128
-dff = 512
-num_heads = 8
-dropout_rate = 0.1
-input_vocab_size = 27+1
-target_vocab_size = 1
+def test_set_results():
+    '''Results on the complete test set'''
+    prefix =  'Y:\\Juan\\ccs\\models\\transformer'
+    model_ch2, _ = architecture()
+    model_ch2.load_weights(prefix+'_ch2\\checkpoints\\best')
+    model_ch3, _ = architecture()
+    model_ch3.load_weights(prefix+'_ch3\\checkpoints\\best')
+    model_ch4, _ = architecture()
+    model_ch4.load_weights(prefix+'_ch4\\checkpoints\\best')
+
+    prefix = 'Y:\\Juan\\ccs\\Data\\'
+    df_fig4 = pd.read_pickle(prefix+'Fig4_powerlaw.pkl')
+    features_fig4 = np.load(prefix+'one_hot_encoded_fig4.npy', allow_pickle=True)
+
+    df_fig4['transformer'] = 0
+    df_fig4.loc[df_fig4['Charge']==2,'transformer'] = model_ch2.predict(features_fig4[features_fig4[:,-1]==2][:,:-1]).flatten() + df_fig4.loc[df_fig4['Charge']==2,'predicted_ccs']
+    df_fig4.loc[df_fig4['Charge']==3,'transformer'] = model_ch3.predict(features_fig4[features_fig4[:,-1]==3][:,:-1]).flatten() + df_fig4.loc[df_fig4['Charge']==3,'predicted_ccs']
+    df_fig4.loc[df_fig4['Charge']==4,'transformer'] = model_ch4.predict(features_fig4[features_fig4[:,-1]==4][:,:-1]).flatten() + df_fig4.loc[df_fig4['Charge']==4,'predicted_ccs']
+
+    fig, ax = plt.subplots(nrows = 1, ncols = 2, figsize = (20, 6))
+    res_rel = (df_fig4['CCS']-df_fig4['transformer'])/df_fig4['transformer']*100
+    ax[0].hist(res_rel, bins = 50, label = f'MAD = {np.round(scipy.stats.median_abs_deviation(res_rel), 4)}')
+    ax[0].set_xlabel('Relative Error of CCS')
+    ax[0].set_ylabel('Counts')
+    ax[0].set_title('Relative error of CCS w.r.t Ground Truth')
+    ax[0].legend()
+
+    corr, _ = scipy.stats.pearsonr(df_fig4['transformer'],df_fig4['CCS'])
+    print(f'The correlation is: {corr}')
+    ax[1].scatter(df_fig4['CCS'], df_fig4['transformer'], label = f'Corr : {np.round(corr, 5)}', s = 0.1)
+    ax[1].set_xlabel('CCS')
+    ax[1].set_ylabel('Predicted CCS')
+    ax[1].set_title('Scatter Plot CCS vs predicted CCS')
+    ax[1].plot(np.arange(300,800), np.arange(300,800), 'b--')
+    ax[1].legend()
 #%%
-input = tf.keras.layers.Input(shape=(None,))
-target = tf.keras.layers.Input(shape=(None,))
-encoder = Encoder(input_vocab_size, num_layers = num_layers, d_model = d_model, num_heads = num_heads, dff = dff, dropout = dropout_rate)
-#decoder = Decoder(target_vocab_size, num_layers = num_layers, d_model = d_model, num_heads = num_heads, dff = dff, dropout = dropout_rate)
+def architecture():
+  num_layers = 4
+  d_model = 128
+  dff = 512
+  num_heads = 8
+  dropout_rate = 0.1
+  input_vocab_size = 27+1
+  target_vocab_size = 1
+  #%%
+  input = tf.keras.layers.Input(shape=(None,))
+  target = tf.keras.layers.Input(shape=(None,))
+  encoder = Encoder(input_vocab_size, num_layers = num_layers, d_model = d_model, num_heads = num_heads, dff = dff, dropout = dropout_rate)
+  #decoder = Decoder(target_vocab_size, num_layers = num_layers, d_model = d_model, num_heads = num_heads, dff = dff, dropout = dropout_rate)
 
-x = encoder(input)
-x = tf.keras.layers.GlobalAveragePooling1D()(x)
-x = tf.keras.layers.Dropout(0.1)(x)
-x = tf.keras.layers.Dense(20, activation="relu")(x)
-x = tf.keras.layers.Dropout(0.1)(x)
-x = tf.keras.layers.Dense(1)(x)
-print(x.shape)
+  x = encoder(input)
+  x = tf.keras.layers.GlobalAveragePooling1D()(x)
+  x = tf.keras.layers.Dropout(0.1)(x)
+  x = tf.keras.layers.Dense(20, activation="relu")(x)
+  x = tf.keras.layers.Dropout(0.1)(x)
+  x = tf.keras.layers.Dense(1)(x)
+  print(x.shape)
 
-model = tf.keras.models.Model(inputs=input, outputs=x)
-model.summary()
+  model = tf.keras.models.Model(inputs=input, outputs=x)
+  model.summary()
+  optimizer = tf.keras.optimizers.Adam(CustomSchedule(d_model), beta_1=0.9, beta_2=0.98, 
+                                     epsilon=1e-9)
+  return model, optimizer
 #%%
 loss = tf.keras.losses.MeanSquaredError(reduction = 'none')
 
@@ -248,9 +287,8 @@ def masked_loss(real, pred):
 
 metrics = [loss, masked_loss]
 #%%
-optimizer = tf.keras.optimizers.Adam(CustomSchedule(d_model), beta_1=0.9, beta_2=0.98, 
-                                     epsilon=1e-9)
 
+model, optimizer = architecture()
 model.compile(optimizer=optimizer, loss = loss, metrics = metrics) # masked_
 #%%
 charge = 2
