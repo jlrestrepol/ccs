@@ -9,8 +9,10 @@ import numpy as np
 #import tensorflow_text as text
 import tensorflow as tf
 import scipy
+import paths
 #%%
 logging.getLogger('tensorflow').setLevel(logging.ERROR)  # suppress warnings
+path = paths.get_paths()
 device_name = tf.test.gpu_device_name()
 if device_name != '/device:GPU:0':
   raise SystemError('GPU device not found')
@@ -18,8 +20,8 @@ print('Found GPU at: {}'.format(device_name))
 #%%
 def train_val_set(charge = np.nan):
     """Function that outputs train and validation set for a given charge state"""
-    fig1 = pd.read_pickle('/mnt/pool-cox-data08/Juan/ccs/Data/Fig1_powerlaw.pkl')#loads in raw training data
-    features_complete = np.load('/mnt/pool-cox-data08/Juan/ccs/Data/one_hot_encoded_fig1.npy', allow_pickle=True)#load in one-hot-encoded training data
+    fig1 = pd.read_pickle(path['data']+'Fig1_powerlaw.pkl')#loads in raw training data
+    features_complete = np.load(path['data']+'encoded_fig1.npy', allow_pickle=True)#load in one-hot-encoded training data
     label_complete = (fig1['CCS'] - fig1['predicted_ccs']).values#residual
     features = features_complete[features_complete[:,-1] == charge][:,:-1]#choose points with given charge, drop charge feature because of 2 heads
     label = label_complete[features_complete[:,-1] == charge]#choose appropiate residuals
@@ -292,13 +294,12 @@ metrics = [loss, masked_loss]
 model, optimizer = architecture()
 model.compile(optimizer=optimizer, loss = loss, metrics = metrics) # masked_
 #%%
-charge = 2
+charge = 4
 x_train, x_test, y_train, y_test = train_val_set(charge = charge)
 #%%
-#folder = f'Y:\\Juan\\ccs\\models\\transformer_ch{charge}'
-folder = f'..\\models\\transformer_ch{charge}'
-cb = [tf.keras.callbacks.CSVLogger(folder+'\\training.log', append=False),  
-        tf.keras.callbacks.ModelCheckpoint(folder+'\\checkpoints\\best', save_best_only=True, 
+folder = f"{path['models']}transformer_ch{charge}{path['sep']}"
+cb = [tf.keras.callbacks.CSVLogger(f"{folder}training.log", append=False),  
+        tf.keras.callbacks.ModelCheckpoint(f"{folder}checkpoints{path['sep']}best", save_best_only=True, 
         save_weights_only = True)]
 
 history = model.fit(
