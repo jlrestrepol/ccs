@@ -8,17 +8,27 @@ import matplotlib.pyplot as plt
 import numpy as np
 #import tensorflow_text as text
 import tensorflow as tf
-# %%
+import scipy
+import paths
+#%%
 logging.getLogger('tensorflow').setLevel(logging.ERROR)  # suppress warnings
+path = paths.get_paths()
+device_name = tf.test.gpu_device_name()
+if device_name != '/device:GPU:0':
+  raise SystemError('GPU device not found')
+print('Found GPU at: {}'.format(device_name))
 #%%
 def train_val_set(charge = np.nan):
     """Function that outputs train and validation set for a given charge state"""
-    fig1 = pd.read_pickle('../Data/Fig1_powerlaw.pkl')#loads in raw training data
-    features_complete = np.load('/mnt/pool-cox-data08/Juan/ccs/Data/encoded_fig1.npy', allow_pickle=True)#load in one-hot-encoded training data
+    fig1 = pd.read_pickle(path['data']+'Fig1_powerlaw.pkl')#loads in raw training data
+    features_complete = np.load(path['data']+'encoded_fig1.npy', allow_pickle=True)#load in one-hot-encoded training data
     label_complete = (fig1['CCS'] - fig1['predicted_ccs']).values#residual
     features = features_complete[features_complete[:,-1] == charge][:,:-1]#choose points with given charge, drop charge feature because of 2 heads
     label = label_complete[features_complete[:,-1] == charge]#choose appropiate residuals
     x_train, x_test, y_train, y_test = model_selection.train_test_split(features, label, test_size = 0.1, random_state=42)#train/val set split
+    index = np.random.choice(x_train.shape[0], size = 150000, replace = False) #subsample
+    x_train = x_train[index,:]
+    y_train = y_train[index]
     print(f"The Initial Mean Squared Error is: {sk.metrics.mean_squared_error(fig1['CCS'], fig1['predicted_ccs'])}")#prints initial error
     del fig1
     del features_complete
@@ -56,42 +66,6 @@ def create_padding_mask(seq):
 def create_look_ahead_mask(size):
   mask = 1 - tf.linalg.band_part(tf.ones((size, size)), -1, 0)
   return mask  # (seq_len, seq_len)
-#%%
-def scaled_dot_product_attention(q, k, v, mask = None):
-  """Calculate the attention weights.
-  q, k, v must have matching leading dimensions.
-  k, v must have matching penultimate dimension, i.e.: seq_len_k = seq_len_v.
-  The mask has different shapes depending on its type(padding or look ahead)
-  but it must be broadcastable for addition.
-
-  Args:
-    q: query shape == (..., seq_len_q, depth)
-    k: key shape == (..., seq_len_k, depth)
-    v: value shape == (..., seq_len_v, depth_v)
-    mask: Float tensor with shape broadcastable
-          to (..., seq_len_q, seq_len_k). Defaults to None.
-
-  Returns:
-    output, attention_weights
-  """
-
-  matmul_qk = tf.matmul(q, k, transpose_b=True)  # (..., seq_len_q, seq_len_k)
-
-  # scale matmul_qk
-  dk = tf.cast(tf.shape(k)[-1], tf.float32)
-  scaled_attention_logits = matmul_qk / tf.math.sqrt(dk)
-
-  # add the mask to the scaled tensor.
-  if mask is not None:
-    scaled_attention_logits += (mask * -1e9)
-
-  # softmax is normalized on the last axis (seq_len_k) so that the scores
-  # add up to 1.
-  attention_weights = tf.nn.softmax(scaled_attention_logits, axis=-1)  # (..., seq_len_q, seq_len_k)
-
-  output = tf.matmul(attention_weights, v)  # (..., seq_len_q, depth_v)
-
-  return output
 # %%
 class MultiHeadAttention(tf.keras.layers.Layer):
   def __init__(self, d_model = 512, num_heads = 8, causal=False, dropout=0.0):
@@ -150,12 +124,6 @@ class MultiHeadAttention(tf.keras.layers.Layer):
     x = self.dense(attention)
 
     return x
-# %%
-def point_wise_feed_forward_network(d_model, dff):
-  return tf.keras.Sequential([
-      tf.keras.layers.Dense(dff, activation='relu'),  # (batch_size, seq_len, dff)
-      tf.keras.layers.Dense(d_model)  # (batch_size, seq_len, d_model)
-  ])
 # %%
 class EncoderLayer(tf.keras.layers.Layer):
   def __init__(self,  d_model = 512, num_heads = 8, dff = 2048, dropout = 0.0):
@@ -222,50 +190,6 @@ class Encoder(tf.keras.layers.Layer):
     return self.embedding.compute_mask(inputs)
 
 # %%
-class Transformer(tf.keras.Model):
-  def __init__(self, num_layers, d_model, num_heads, dff, input_vocab_size,
-               pe_input, rate=0.1):
-    super().__init__()
-    print( d_model % num_heads == 0)
-    self.encoder = Encoder(num_layers, d_model, num_heads, dff,
-                             input_vocab_size, pe_input, rate)
-
-
-    self.final_layer = tf.keras.layers.Dense(1)
-
-  def call(self, inputs, training):
-    # Keras models prefer if you pass all your inputs in the first argument
-    inp, tar = inputs
-
-    enc_padding_mask, look_ahead_mask, dec_padding_mask = self.create_masks(inp, tar)
-
-    enc_output = self.encoder(inp, training, enc_padding_mask)  # (batch_size, inp_seq_len, d_model)
-
-    x = tf.keras.layers.GlobalAveragePooling1D()(enc_output)
-    x = tf.keras.layers.Dropout(0.1)(x)
-    x = tf.keras.layers.Dense(20, activation="relu")(x)
-    dec_output = tf.keras.layers.Dropout(0.1)(x)
-    final_output = self.final_layer(dec_output)  # (batch_size, tar_seq_len, target_vocab_size)
-
-    return final_output
-
-  def create_masks(self, inp, tar):
-    # Encoder padding mask
-    enc_padding_mask = create_padding_mask(inp)
-
-    # Used in the 2nd attention block in the decoder.
-    # This padding mask is used to mask the encoder outputs.
-    dec_padding_mask = create_padding_mask(inp)
-
-    # Used in the 1st attention block in the decoder.
-    # It is used to pad and mask future tokens in the input received by
-    # the decoder.
-    look_ahead_mask = create_look_ahead_mask(tf.shape(tar)[1])
-    dec_target_padding_mask = create_padding_mask(tar)
-    look_ahead_mask = tf.maximum(dec_target_padding_mask, look_ahead_mask)
-
-    return enc_padding_mask, look_ahead_mask, dec_padding_mask
-# %%
 class CustomSchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
   def __init__(self, d_model, warmup_steps=4000):
     super(CustomSchedule, self).__init__()
@@ -280,33 +204,78 @@ class CustomSchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
     arg2 = step * (self.warmup_steps ** -1.5)
 
     return tf.math.rsqrt(self.d_model) * tf.math.minimum(arg1, arg2)
+  
+  def get_config(self):
+    config = {
+    'd_model': self.d_model,
+    'warmup_steps': self.warmup_steps,
 
+     }
+    return config
 #%%
-num_layers = 4
-d_model = 128
-dff = 512
-num_heads = 8
-dropout_rate = 0.1
-input_vocab_size = 27+1
-target_vocab_size = 1
-#%%
-x_train, x_test, y_train, y_test = train_val_set(charge = 2)
-#%%
-input = tf.keras.layers.Input(shape=(None,))
-target = tf.keras.layers.Input(shape=(None,))
-encoder = Encoder(input_vocab_size, num_layers = num_layers, d_model = d_model, num_heads = num_heads, dff = dff, dropout = dropout_rate)
-#decoder = Decoder(target_vocab_size, num_layers = num_layers, d_model = d_model, num_heads = num_heads, dff = dff, dropout = dropout_rate)
+def test_set_results():
+    '''Results on the complete test set'''
+    prefix =  '/mnt/pool-cox-data08/Juan/ccs/models/transformer'
+    model_ch2, _ = architecture()
+    model_ch2.load_weights(prefix+'_ch2/checkpoints/best')
+    model_ch3, _ = architecture()
+    model_ch3.load_weights(prefix+'_ch3/checkpoints/best')
+    model_ch4, _ = architecture()
+    model_ch4.load_weights(prefix+'_ch4/checkpoints/best')
 
-x = encoder(input)
-x = tf.keras.layers.GlobalAveragePooling1D()(x)
-x = tf.keras.layers.Dropout(0.1)(x)
-x = tf.keras.layers.Dense(20, activation="relu")(x)
-x = tf.keras.layers.Dropout(0.1)(x)
-x = tf.keras.layers.Dense(1)(x)
-print(x.shape)
+    prefix = '/mnt/pool-cox-data08/Juan/ccs/Data/'
+    df_fig4 = pd.read_pickle(prefix+'Fig4_powerlaw.pkl')
+    features_fig4 = np.load(prefix+'encoded_fig4.npy', allow_pickle=True)
 
-model = tf.keras.models.Model(inputs=input, outputs=x)
-model.summary()
+    df_fig4['transformer'] = 0
+    df_fig4.loc[df_fig4['Charge']==2,'transformer'] = model_ch2.predict(features_fig4[features_fig4[:,-1]==2][:,:-1]).flatten() + df_fig4.loc[df_fig4['Charge']==2,'predicted_ccs']
+    df_fig4.loc[df_fig4['Charge']==3,'transformer'] = model_ch3.predict(features_fig4[features_fig4[:,-1]==3][:,:-1]).flatten() + df_fig4.loc[df_fig4['Charge']==3,'predicted_ccs']
+    df_fig4.loc[df_fig4['Charge']==4,'transformer'] = model_ch4.predict(features_fig4[features_fig4[:,-1]==4][:,:-1]).flatten() + df_fig4.loc[df_fig4['Charge']==4,'predicted_ccs']
+
+    fig, ax = plt.subplots(nrows = 1, ncols = 2, figsize = (20, 6))
+    res_rel = (df_fig4['CCS']-df_fig4['transformer'])/df_fig4['transformer']*100
+    ax[0].hist(res_rel, bins = 50, label = f'MAD = {np.round(scipy.stats.median_abs_deviation(res_rel), 4)}')
+    ax[0].set_xlabel('Relative Error of CCS')
+    ax[0].set_ylabel('Counts')
+    ax[0].set_title('Relative error of CCS w.r.t Ground Truth')
+    ax[0].legend()
+
+    corr, _ = scipy.stats.pearsonr(df_fig4['transformer'],df_fig4['CCS'])
+    print(f'The correlation is: {corr}')
+    ax[1].scatter(df_fig4['CCS'], df_fig4['transformer'], label = f'Corr : {np.round(corr, 5)}', s = 0.1)
+    ax[1].set_xlabel('CCS')
+    ax[1].set_ylabel('Predicted CCS')
+    ax[1].set_title('Scatter Plot CCS vs predicted CCS')
+    ax[1].plot(np.arange(300,800), np.arange(300,800), 'b--')
+    ax[1].legend()
+#%%
+def architecture():
+  num_layers = 4
+  d_model = 128
+  dff = 512
+  num_heads = 8
+  dropout_rate = 0.1
+  input_vocab_size = 27+1
+  target_vocab_size = 1
+  #%%
+  input = tf.keras.layers.Input(shape=(None,))
+  target = tf.keras.layers.Input(shape=(None,))
+  encoder = Encoder(input_vocab_size, num_layers = num_layers, d_model = d_model, num_heads = num_heads, dff = dff, dropout = dropout_rate)
+  #decoder = Decoder(target_vocab_size, num_layers = num_layers, d_model = d_model, num_heads = num_heads, dff = dff, dropout = dropout_rate)
+
+  x = encoder(input)
+  x = tf.keras.layers.GlobalAveragePooling1D()(x)
+  x = tf.keras.layers.Dropout(0.1)(x)
+  x = tf.keras.layers.Dense(20, activation="relu")(x)
+  x = tf.keras.layers.Dropout(0.1)(x)
+  x = tf.keras.layers.Dense(1)(x)
+  print(x.shape)
+
+  model = tf.keras.models.Model(inputs=input, outputs=x)
+  model.summary()
+  optimizer = tf.keras.optimizers.Adam(CustomSchedule(d_model), beta_1=0.9, beta_2=0.98, 
+                                     epsilon=1e-9)
+  return model, optimizer
 #%%
 loss = tf.keras.losses.MeanSquaredError(reduction = 'none')
 
@@ -321,16 +290,19 @@ def masked_loss(real, pred):
 
 metrics = [loss, masked_loss]
 #%%
-optimizer = tf.keras.optimizers.Adam(CustomSchedule(d_model), beta_1=0.9, beta_2=0.98, 
-                                     epsilon=1e-9)
 
+model, optimizer = architecture()
 model.compile(optimizer=optimizer, loss = loss, metrics = metrics) # masked_
 #%%
-folder = f'../models/transformer_ch2/'
-cb = [tf.keras.callbacks.CSVLogger(folder+'training.log', append=False),  
-        tf.keras.callbacks.ModelCheckpoint(folder+'checkpoints/best', save_best_only=True)]
+charge = 4
+x_train, x_test, y_train, y_test = train_val_set(charge = charge)
+#%%
+folder = f"{path['models']}transformer_ch{charge}{path['sep']}"
+cb = [tf.keras.callbacks.CSVLogger(f"{folder}training.log", append=False),  
+        tf.keras.callbacks.ModelCheckpoint(f"{folder}checkpoints{path['sep']}best", save_best_only=True, 
+        save_weights_only = True)]
 
 history = model.fit(
-    x_train, y_train, batch_size=64, epochs=30, validation_data=(x_test, y_test), callbacks=cb
+    x_train, y_train, batch_size=8, epochs=30, validation_data=(x_test, y_test), callbacks=cb
 )
 # %%
