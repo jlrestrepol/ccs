@@ -21,14 +21,14 @@ print('Found GPU at: {}'.format(device_name))
 def train_val_set(charge = np.nan):
     """Function that outputs train and validation set for a given charge state"""
     fig1 = pd.read_pickle(path['data']+'Fig1_powerlaw.pkl')#loads in raw training data
-    features_complete = np.load(path['data']+'encoded_fig1.npy', allow_pickle=True)#load in one-hot-encoded training data
+    features_complete = np.load(path['data']+'one_hot_encoded_fig1.npy', allow_pickle=True)#load in one-hot-encoded training data
     label_complete = (fig1['CCS'] - fig1['predicted_ccs']).values#residual
     features = features_complete[features_complete[:,-1] == charge][:,:-1]#choose points with given charge, drop charge feature because of 2 heads
     label = label_complete[features_complete[:,-1] == charge]#choose appropiate residuals
     x_train, x_test, y_train, y_test = model_selection.train_test_split(features, label, test_size = 0.1, random_state=42)#train/val set split
-    index = np.random.choice(x_train.shape[0], size = 150000, replace = False) #subsample
-    x_train = x_train[index,:]
-    y_train = y_train[index]
+    #index = np.random.choice(x_train.shape[0], size = 150000, replace = False) #subsample
+    #x_train = x_train[index,:]
+    #y_train = y_train[index]
     print(f"The Initial Mean Squared Error is: {sk.metrics.mean_squared_error(fig1['CCS'], fig1['predicted_ccs'])}")#prints initial error
     del fig1
     del features_complete
@@ -249,13 +249,23 @@ def test_set_results():
     ax[1].plot(np.arange(300,800), np.arange(300,800), 'b--')
     ax[1].legend()
 #%%
-def architecture():
-  num_layers = 4
-  d_model = 128
-  dff = 512
-  num_heads = 8
+def diagnostic_plot(file_path):
+    '''Diagnostic plots of the DL model'''
+    data = pd.read_csv(file_path)
+    plt.plot(data['loss'])
+    plt.plot(data['val_loss'])
+    plt.title('model accuracy')
+    plt.ylabel('loss')
+    plt.xlabel('epoch')
+    plt.legend(['train', 'val'], loc='upper left')
+#%%
+def architecture(x_train):
+  num_layers = 1
+  d_model = x_train.shape[1]
+  dff = 32
+  num_heads = 2
   dropout_rate = 0.1
-  input_vocab_size = 27+1
+  input_vocab_size = x_train.shape[1] + 1
   target_vocab_size = 1
   #%%
   input = tf.keras.layers.Input(shape=(None,))
@@ -289,13 +299,14 @@ def masked_loss(real, pred):
   return tf.reduce_sum(loss_)/tf.reduce_sum(mask)
 
 metrics = [loss, masked_loss]
-#%%
 
-model, optimizer = architecture()
-model.compile(optimizer=optimizer, loss = loss, metrics = metrics) # masked_
 #%%
-charge = 4
+charge = 2
 x_train, x_test, y_train, y_test = train_val_set(charge = charge)
+
+#%%
+model, optimizer = architecture(x_train)
+model.compile(optimizer=optimizer, loss = loss, metrics = metrics) # masked_
 #%%
 folder = f"{path['models']}transformer_ch{charge}{path['sep']}"
 cb = [tf.keras.callbacks.CSVLogger(f"{folder}training.log", append=False),  
@@ -303,6 +314,6 @@ cb = [tf.keras.callbacks.CSVLogger(f"{folder}training.log", append=False),
         save_weights_only = True)]
 
 history = model.fit(
-    x_train, y_train, batch_size=8, epochs=30, validation_data=(x_test, y_test), callbacks=cb
+    x_train, y_train, batch_size=64, epochs=30, validation_data=(x_test, y_test), callbacks=cb
 )
 # %%
