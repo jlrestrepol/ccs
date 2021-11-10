@@ -4,13 +4,20 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 import matplotlib.pyplot as plt
-import seaborn as sns
+#import seaborn as sns
 import pandas as pd
 import sklearn as sk
 from sklearn import model_selection
 import scipy
 import sys
-
+import paths
+#%%
+global path
+path = paths.get_paths()
+device_name = tf.test.gpu_device_name()
+if device_name != '/device:GPU:0':
+  raise SystemError('GPU device not found')
+print('Found GPU at: {}'.format(device_name))
 #%%
 class MultiHeadSelfAttention(layers.Layer):
     def __init__(self, embed_dim, num_heads=8):
@@ -115,8 +122,8 @@ def diagnostic_plot(file_path):
 def test_set_one_charge_results(charge = 2):
     '''Plots in the test set: scatter and histogram'''
     ### Load-in model and Data
-    df_fig4 = pd.read_pickle('../Data/Fig4_powerlaw.pkl')
-    features_fig4 = np.load('../Data/one_hot_encoded_fig4.npy')
+    df_fig4 = pd.read_pickle(path['data']+'Fig4_powerlaw.pkl')
+    features_fig4 = np.load(path['data']+'one_hot_encoded_fig4.npy')
     path = f'../models/transformer_ch{charge}/checkpoints/best'
     model = tf.keras.models.load_model(path)
     ### Separate by charge and make predictions, change after all the models are trained
@@ -173,8 +180,8 @@ def test_set_results():
 
 def train_val_set(charge = np.nan):
     """Function that outputs train and validation set for a given charge state"""
-    fig1 = pd.read_pickle('../Data/Fig1_powerlaw.pkl')#loads in raw training data
-    features_complete = np.load('../Data/one_hot_encoded_fig1.npy')#load in one-hot-encoded training data
+    fig1 = pd.read_pickle(path['data']+'Fig1_powerlaw.pkl')#loads in raw training data
+    features_complete = np.load(path['data']+'one_hot_encoded_fig1.npy')#load in one-hot-encoded training data
     label_complete = (fig1['CCS'] - fig1['predicted_ccs']).values#residual
     features = features_complete[features_complete[:,-1] == charge][:,:-1]#choose points with given charge, drop charge feature because of 2 heads
     label = label_complete[features_complete[:,-1] == charge]#choose appropiate residuals
@@ -194,11 +201,6 @@ def architecutre(x_train):
     ff_dim = 32  # Hidden layer size in feed forward network inside transformer
 
     inputs = layers.Input(shape=(embed_dim,))
-    '''transformer_block1 = TransformerBlock(embed_dim, num_heads, ff_dim)
-    x = transformer_block1(inputs)
-    print(x.shape, x_train.shape)
-    transformer_block2 = TransformerBlock(x_train.shape[1], num_heads, ff_dim)
-    x = transformer_block2(x)'''
     transformer_block = TransformerBlock(embed_dim, num_heads, ff_dim)
     x = transformer_block(inputs)
     x = layers.GlobalAveragePooling1D()(x)
@@ -212,7 +214,7 @@ def architecutre(x_train):
 
 #%%
 def train():
-    charge = 3
+    charge = 2
     x_train, x_test, y_train, y_test = train_val_set(charge = charge)
     X_train_tensor = np.asarray(x_train)
     y_train_tensor = np.asarray(y_train)
@@ -224,7 +226,7 @@ def train():
    
     ############## Format input and fit model #############
 
-    folder = f'../models/transformer_ch{charge}/'
+    folder = f"{path['models']}transformer_ch{charge}_Singlelayer{path['sep']}"
     cb = [tf.keras.callbacks.CSVLogger(folder+'training.log', append=False),  
          tf.keras.callbacks.ModelCheckpoint(folder+'checkpoints/best', save_best_only=True)]
 
