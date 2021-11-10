@@ -258,7 +258,7 @@ class CustomSchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
 #%%
 def architecture(x_train):
   num_layers = 1
-  d_model = x_train.shape[1]
+  d_model = 256
   dff = 32
   num_heads = 2
   dropout_rate = 0.1
@@ -283,7 +283,7 @@ def architecture(x_train):
                                      epsilon=1e-9)
   return model, 'adam'
 #%%
-charge = 2
+charge = 3
 x_train, x_test, y_train, y_test = train_val_set(charge = charge)
 x_train = np.asarray(x_train)
 y_train = np.asarray(y_train)
@@ -301,6 +301,6 @@ cb = [tf.keras.callbacks.CSVLogger(f"{folder}training.log", append=False),
         save_weights_only = True)]
 
 history = model.fit(
-    x_train, y_train, batch_size=32, epochs=30, validation_data=(x_test, y_test), callbacks=cb
+    x_train, y_train, batch_size=64, epochs=30, validation_data=(x_test, y_test), callbacks=cb
 )
 # %%
