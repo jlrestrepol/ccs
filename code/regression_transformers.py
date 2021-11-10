@@ -107,6 +107,7 @@ class TokenAndPositionEmbedding(layers.Layer):
         x = self.token_emb(x)
         return x + positions
 
+
 # %%
 
 def diagnostic_plot(file_path):
@@ -181,7 +182,7 @@ def test_set_results():
 def train_val_set(charge = np.nan):
     """Function that outputs train and validation set for a given charge state"""
     fig1 = pd.read_pickle(path['data']+'Fig1_powerlaw.pkl')#loads in raw training data
-    features_complete = np.load(path['data']+'one_hot_encoded_fig1.npy')#load in one-hot-encoded training data
+    features_complete = np.load(path['data']+'encoded_fig1.npy')#load in one-hot-encoded training data
     label_complete = (fig1['CCS'] - fig1['predicted_ccs']).values#residual
     features = features_complete[features_complete[:,-1] == charge][:,:-1]#choose points with given charge, drop charge feature because of 2 heads
     label = label_complete[features_complete[:,-1] == charge]#choose appropiate residuals
@@ -193,16 +194,20 @@ def train_val_set(charge = np.nan):
     del features
     del label
     return x_train, x_test, y_train, y_test
-
+#%%
 def architecutre(x_train):
     """Architecture of the predictor"""
-    embed_dim = x_train.shape[1]  # Embedding size for each token
-    num_heads = 2  # Number of attention heads
-    ff_dim = 32  # Hidden layer size in feed forward network inside transformer
+    embed_dim = 256  # Embedding size for each token
+    num_heads = 8  # Number of attention heads
+    ff_dim = 64  # Hidden layer size in feed forward network inside transformer
+    vocab_size = 27
+    max_len = x_train.shape[1]
 
-    inputs = layers.Input(shape=(embed_dim,))
+    inputs = layers.Input(shape=(max_len,))
+    embedding_layer = TokenAndPositionEmbedding(max_len, vocab_size, embed_dim)
+    x = embedding_layer(inputs)
     transformer_block = TransformerBlock(embed_dim, num_heads, ff_dim)
-    x = transformer_block(inputs)
+    x = transformer_block(x)
     x = layers.GlobalAveragePooling1D()(x)
     x = layers.Dropout(0.1)(x)
     x = layers.Dense(20, activation="relu")(x)
