@@ -224,9 +224,33 @@ def architecutre(x_train):
     outputs = layers.Dense(1)(x)
 
     model = keras.Model(inputs=inputs, outputs=outputs)
+    optimizer = tf.keras.optimizers.Adam(CustomSchedule(embed_dim), beta_1=0.9, beta_2=0.98, 
+                                     epsilon=1e-9)
     model.summary()
-    return model
+    return model, optimizer
+#%%
+class CustomSchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
+  def __init__(self, d_model, warmup_steps=4000):
+    super(CustomSchedule, self).__init__()
 
+    self.d_model = d_model
+    self.d_model = tf.cast(self.d_model, tf.float32)
+
+    self.warmup_steps = warmup_steps
+
+  def __call__(self, step):
+    arg1 = tf.math.rsqrt(step)
+    arg2 = step * (self.warmup_steps ** -1.5)
+
+    return tf.math.rsqrt(self.d_model) * tf.math.minimum(arg1, arg2)
+  
+  def get_config(self):
+    config = {
+    'd_model': self.d_model,
+    'warmup_steps': self.warmup_steps,
+
+     }
+    return config
 #%%
 def train(charge):
     x_train, x_test, y_train, y_test = train_val_set(charge = charge)
@@ -235,30 +259,32 @@ def train(charge):
     X_test_tensor = np.asarray(x_test)
     y_test_tensor = np.asarray(y_test)
 
-    model = architecutre(x_train)#initializes new model
+    model, optimizer = architecutre(x_train)#initializes new model
     #model = tf.keras.models.load_model('../models/transformer_ch2')#loads existing model
    
     ############## Format input and fit model #############
 
-    folder = f"{path['models']}transformer_ch{charge}_Singlelayer{path['sep']}"
+    folder = f"{path['models']}transformer_ch{charge}{path['sep']}"
     cb = [tf.keras.callbacks.CSVLogger(folder+'training.log', append=False),  
-         tf.keras.callbacks.ModelCheckpoint(folder+'checkpoints/best', save_best_only=True)]
+         tf.keras.callbacks.ModelCheckpoint(folder+'checkpoints/best', save_best_only=True, save_weights_only=True)]
 
     print(len(X_train_tensor), "Training data")
     print(len(X_test_tensor), "Test data")
 
-    model.compile(loss='mean_squared_error', optimizer='adam')
+    model.compile(loss='mean_squared_error', optimizer=optimizer)
     history = model.fit(
         X_train_tensor, y_train_tensor, batch_size=64, epochs=30, validation_data=(X_test_tensor, y_test_tensor), callbacks=cb
     )
 
 #%%
 if __name__ == "__main__":
+    train(charge = 2)
+    folder = f"{path['models']}transformer_ch2{path['sep']}"
     train(charge = 3)
-    folder = f"{path['models']}transformer_ch3_Singlelayer{path['sep']}"
+    folder = f"{path['models']}transformer_ch3{path['sep']}"
     diagnostic_plot(folder+'training.log')
     train(charge = 4)
-    folder = f"{path['models']}transformer_ch4_Singlelayer{path['sep']}"
+    folder = f"{path['models']}transformer_ch4{path['sep']}"
     diagnostic_plot(folder+'training.log')
 #%%
 diagnostic_plot('../models/transformer_ch2/training.log')
