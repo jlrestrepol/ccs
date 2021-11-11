@@ -34,10 +34,12 @@ class MultiHeadSelfAttention(layers.Layer):
         self.value_dense = layers.Dense(embed_dim)
         self.combine_heads = layers.Dense(embed_dim)
 
-    def attention(self, query, key, value):
+    def attention(self, query, key, value, mask):
         score = tf.matmul(query, key, transpose_b=True)
         dim_key = tf.cast(tf.shape(key)[-1], tf.float32)
         scaled_score = score / tf.math.sqrt(dim_key)
+        if mask is not None:
+            scaled_score += (mask * -1e9)#zero masked cells out
         weights = tf.nn.softmax(scaled_score, axis=-1)
         output = tf.matmul(weights, value)
         return output, weights
@@ -61,7 +63,7 @@ class MultiHeadSelfAttention(layers.Layer):
         value = self.separate_heads(
             value, batch_size
         )  # (batch_size, num_heads, seq_len, projection_dim)
-        attention, weights = self.attention(query, key, value)
+        attention, weights = self.attention(query, key, value, mask)
         attention = tf.transpose(
             attention, perm=[0, 2, 1, 3]
         )  # (batch_size, seq_len, num_heads, projection_dim)
@@ -85,8 +87,8 @@ class TransformerBlock(layers.Layer):
         self.dropout1 = layers.Dropout(rate)
         self.dropout2 = layers.Dropout(rate)
 
-    def call(self, inputs, training):
-        attn_output = self.att(inputs)
+    def call(self, inputs, mask, training):
+        attn_output = self.att(inputs, mask)
         attn_output = self.dropout1(attn_output, training=training)
         out1 = self.layernorm1(inputs + attn_output)
         ffn_output = self.ffn(out1)
@@ -107,6 +109,12 @@ class TokenAndPositionEmbedding(layers.Layer):
         x = self.token_emb(x)
         return x + positions
 
+def create_padding_mask(seq):
+  seq = tf.cast(tf.math.equal(seq, 22), tf.float32)
+
+  # add extra dimensions to add the padding
+  # to the attention logits.
+  return seq[:, tf.newaxis, tf.newaxis, :]  # (batch_size, 1, 1, seq_len)
 
 # %%
 
@@ -214,9 +222,10 @@ def architecutre(x_train):
     transformer_block2 = TransformerBlock(embed_dim, num_heads, ff_dim)
     transformer_block3 = TransformerBlock(256, num_heads, ff_dim)
     transformer_block4 = TransformerBlock(embed_dim, num_heads, ff_dim)
+    mask = create_padding_mask(inputs)
     x = embedding_layer(inputs)
     #x *= tf.math.sqrt(tf.cast(embed_dim, tf.float32))
-    x = transformer_block1(x)
+    x = transformer_block1(x, mask = mask)
     x = layers.GlobalAveragePooling1D()(x)
     x = layers.Dropout(0.1)(x)
     x = layers.Dense(20, activation="relu")(x)
