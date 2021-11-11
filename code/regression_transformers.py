@@ -149,18 +149,23 @@ def test_set_one_charge_results(charge = 2):
 
 def test_set_results():
     '''Results on the complete test set'''
-    charge = 2
-    folder = f"{path['models']}transformer_ch{charge}_Singlelayer{path['sep']}"
-    model_ch2 = tf.keras.models.load_model(folder+'checkpoints\\best')
-    charge = 3
-    folder = f"{path['models']}transformer_ch{charge}_Singlelayer{path['sep']}"
-    model_ch3 = tf.keras.models.load_model(folder+'checkpoints\\best')
-    charge = 4
-    folder = f"{path['models']}transformer_ch{charge}_Singlelayer{path['sep']}"
-    model_ch4 = tf.keras.models.load_model(folder+'checkpoints\\best')
-
     df_fig4 = pd.read_pickle(f"{path['data']}Fig4_powerlaw.pkl")
     features_fig4 = np.load(f"{path['data']}encoded_fig4.npy", allow_pickle=True)
+    
+    charge = 2
+    model_ch2, _ = architecutre(features_fig4[:,:-1])#initializes new model
+    folder = f"{path['models']}transformer_ch{charge}{path['sep']}"
+    model_ch2.load_weights(folder+'checkpoints\\best')
+    charge = 3
+    model_ch3, _ = architecutre(features_fig4[:,:-1])#initializes new model
+    folder = f"{path['models']}transformer_ch{charge}{path['sep']}"
+    model_ch3.load_weights(folder+'checkpoints\\best')
+    charge = 4
+    model_ch4, _ = architecutre(features_fig4[:,:-1])#initializes new model
+    folder = f"{path['models']}transformer_ch{charge}{path['sep']}"
+    model_ch4.load_weights(folder+'checkpoints\\best')
+
+
 
     df_fig4['transformer'] = 0
     df_fig4.loc[df_fig4['Charge']==2,'transformer'] = model_ch2.predict(features_fig4[features_fig4[:,-1]==2][:,:-1]).flatten() + df_fig4.loc[df_fig4['Charge']==2,'predicted_ccs']
