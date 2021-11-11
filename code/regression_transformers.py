@@ -149,13 +149,18 @@ def test_set_one_charge_results(charge = 2):
 
 def test_set_results():
     '''Results on the complete test set'''
-    prefix = '../models/transformer'
-    model_ch2 = tf.keras.models.load_model(prefix+'_ch2/checkpoints/best')
-    model_ch3 = tf.keras.models.load_model(prefix+'_ch3/checkpoints/best')
-    model_ch4 = tf.keras.models.load_model(prefix+'_ch4/checkpoints/best')
+    charge = 2
+    folder = f"{path['models']}transformer_ch{charge}_Singlelayer{path['sep']}"
+    model_ch2 = tf.keras.models.load_model(folder+'checkpoints\\best')
+    charge = 3
+    folder = f"{path['models']}transformer_ch{charge}_Singlelayer{path['sep']}"
+    model_ch3 = tf.keras.models.load_model(folder+'checkpoints\\best')
+    charge = 4
+    folder = f"{path['models']}transformer_ch{charge}_Singlelayer{path['sep']}"
+    model_ch4 = tf.keras.models.load_model(folder+'checkpoints\\best')
 
-    df_fig4 = pd.read_pickle('../Data/Fig4_powerlaw.pkl')
-    features_fig4 = np.load('../Data/one_hot_encoded_fig4.npy', allow_pickle=True)
+    df_fig4 = pd.read_pickle(f"{path['data']}Fig4_powerlaw.pkl")
+    features_fig4 = np.load(f"{path['data']}encoded_fig4.npy", allow_pickle=True)
 
     df_fig4['transformer'] = 0
     df_fig4.loc[df_fig4['Charge']==2,'transformer'] = model_ch2.predict(features_fig4[features_fig4[:,-1]==2][:,:-1]).flatten() + df_fig4.loc[df_fig4['Charge']==2,'predicted_ccs']
@@ -198,16 +203,20 @@ def train_val_set(charge = np.nan):
 def architecutre(x_train):
     """Architecture of the predictor"""
     embed_dim = 256  # Embedding size for each token
-    num_heads = 8  # Number of attention heads
-    ff_dim = 64  # Hidden layer size in feed forward network inside transformer
+    num_heads = 2  # Number of attention heads
+    ff_dim = 32  # Hidden layer size in feed forward network inside transformer
     vocab_size = 27
     max_len = x_train.shape[1]
 
     inputs = layers.Input(shape=(max_len,))
     embedding_layer = TokenAndPositionEmbedding(max_len, vocab_size, embed_dim)
+    transformer_block1 = TransformerBlock(embed_dim, num_heads, ff_dim)
+    transformer_block2 = TransformerBlock(embed_dim, num_heads, ff_dim)
+    transformer_block3 = TransformerBlock(256, num_heads, ff_dim)
+    transformer_block4 = TransformerBlock(embed_dim, num_heads, ff_dim)
     x = embedding_layer(inputs)
-    transformer_block = TransformerBlock(embed_dim, num_heads, ff_dim)
-    x = transformer_block(x)
+    #x *= tf.math.sqrt(tf.cast(embed_dim, tf.float32))
+    x = transformer_block1(x)
     x = layers.GlobalAveragePooling1D()(x)
     x = layers.Dropout(0.1)(x)
     x = layers.Dense(20, activation="relu")(x)
@@ -215,11 +224,11 @@ def architecutre(x_train):
     outputs = layers.Dense(1)(x)
 
     model = keras.Model(inputs=inputs, outputs=outputs)
+    model.summary()
     return model
 
 #%%
-def train():
-    charge = 2
+def train(charge):
     x_train, x_test, y_train, y_test = train_val_set(charge = charge)
     X_train_tensor = np.asarray(x_train)
     y_train_tensor = np.asarray(y_train)
@@ -245,7 +254,12 @@ def train():
 
 #%%
 if __name__ == "__main__":
-    train()
+    train(charge = 3)
+    folder = f"{path['models']}transformer_ch3_Singlelayer{path['sep']}"
+    diagnostic_plot(folder+'training.log')
+    train(charge = 4)
+    folder = f"{path['models']}transformer_ch4_Singlelayer{path['sep']}"
+    diagnostic_plot(folder+'training.log')
 #%%
 diagnostic_plot('../models/transformer_ch2/training.log')
 # %%
