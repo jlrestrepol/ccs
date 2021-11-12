@@ -21,14 +21,14 @@ print('Found GPU at: {}'.format(device_name))
 def train_val_set(charge = np.nan):
     """Function that outputs train and validation set for a given charge state"""
     fig1 = pd.read_pickle(path['data']+'Fig1_powerlaw.pkl')#loads in raw training data
-    features_complete = np.load(path['data']+'encoded_fig1.npy', allow_pickle=True)#load in one-hot-encoded training data
+    features_complete = np.load(path['data']+'one_hot_encoded_fig1.npy', allow_pickle=True)#load in one-hot-encoded training data
     label_complete = (fig1['CCS'] - fig1['predicted_ccs']).values#residual
     features = features_complete[features_complete[:,-1] == charge][:,:-1]#choose points with given charge, drop charge feature because of 2 heads
     label = label_complete[features_complete[:,-1] == charge]#choose appropiate residuals
     x_train, x_test, y_train, y_test = model_selection.train_test_split(features, label, test_size = 0.1, random_state=42)#train/val set split
-    index = np.random.choice(x_train.shape[0], size = 150000, replace = False) #subsample
-    x_train = x_train[index,:]
-    y_train = y_train[index]
+    #index = np.random.choice(x_train.shape[0], size = 150000, replace = False) #subsample
+    #x_train = x_train[index,:]
+    #y_train = y_train[index]
     print(f"The Initial Mean Squared Error is: {sk.metrics.mean_squared_error(fig1['CCS'], fig1['predicted_ccs'])}")#prints initial error
     del fig1
     del features_complete
@@ -36,6 +36,52 @@ def train_val_set(charge = np.nan):
     del features
     del label
     return np.array(x_train), np.array(x_test), np.array(y_train), np.array(y_test)
+#%%
+def test_set_results():
+    '''Results on the complete test set'''
+    prefix =  '/mnt/pool-cox-data08/Juan/ccs/models/transformer'
+    model_ch2, _ = architecture()
+    model_ch2.load_weights(prefix+'_ch2/checkpoints/best')
+    model_ch3, _ = architecture()
+    model_ch3.load_weights(prefix+'_ch3/checkpoints/best')
+    model_ch4, _ = architecture()
+    model_ch4.load_weights(prefix+'_ch4/checkpoints/best')
+
+    prefix = '/mnt/pool-cox-data08/Juan/ccs/Data/'
+    df_fig4 = pd.read_pickle(prefix+'Fig4_powerlaw.pkl')
+    features_fig4 = np.load(prefix+'encoded_fig4.npy', allow_pickle=True)
+
+    df_fig4['transformer'] = 0
+    df_fig4.loc[df_fig4['Charge']==2,'transformer'] = model_ch2.predict(features_fig4[features_fig4[:,-1]==2][:,:-1]).flatten() + df_fig4.loc[df_fig4['Charge']==2,'predicted_ccs']
+    df_fig4.loc[df_fig4['Charge']==3,'transformer'] = model_ch3.predict(features_fig4[features_fig4[:,-1]==3][:,:-1]).flatten() + df_fig4.loc[df_fig4['Charge']==3,'predicted_ccs']
+    df_fig4.loc[df_fig4['Charge']==4,'transformer'] = model_ch4.predict(features_fig4[features_fig4[:,-1]==4][:,:-1]).flatten() + df_fig4.loc[df_fig4['Charge']==4,'predicted_ccs']
+
+    fig, ax = plt.subplots(nrows = 1, ncols = 2, figsize = (20, 6))
+    res_rel = (df_fig4['CCS']-df_fig4['transformer'])/df_fig4['transformer']*100
+    ax[0].hist(res_rel, bins = 50, label = f'MAD = {np.round(scipy.stats.median_abs_deviation(res_rel), 4)}')
+    ax[0].set_xlabel('Relative Error of CCS')
+    ax[0].set_ylabel('Counts')
+    ax[0].set_title('Relative error of CCS w.r.t Ground Truth')
+    ax[0].legend()
+
+    corr, _ = scipy.stats.pearsonr(df_fig4['transformer'],df_fig4['CCS'])
+    print(f'The correlation is: {corr}')
+    ax[1].scatter(df_fig4['CCS'], df_fig4['transformer'], label = f'Corr : {np.round(corr, 5)}', s = 0.1)
+    ax[1].set_xlabel('CCS')
+    ax[1].set_ylabel('Predicted CCS')
+    ax[1].set_title('Scatter Plot CCS vs predicted CCS')
+    ax[1].plot(np.arange(300,800), np.arange(300,800), 'b--')
+    ax[1].legend()
+#%%
+def diagnostic_plot(file_path):
+    '''Diagnostic plots of the DL model'''
+    data = pd.read_csv(file_path)
+    plt.plot(data['loss'])
+    plt.plot(data['val_loss'])
+    plt.title('model accuracy')
+    plt.ylabel('loss')
+    plt.xlabel('epoch')
+    plt.legend(['train', 'val'], loc='upper left')
 #%%
 def get_angles(pos, i, d_model):
   angle_rates = 1 / np.power(10000, (2 * (i//2)) / np.float32(d_model))
@@ -62,10 +108,6 @@ def create_padding_mask(seq):
   # add extra dimensions to add the padding
   # to the attention logits.
   return seq[:, tf.newaxis, tf.newaxis, :]  # (batch_size, 1, 1, seq_len)
-# %%
-def create_look_ahead_mask(size):
-  mask = 1 - tf.linalg.band_part(tf.ones((size, size)), -1, 0)
-  return mask  # (seq_len, seq_len)
 # %%
 class MultiHeadAttention(tf.keras.layers.Layer):
   def __init__(self, d_model = 512, num_heads = 8, causal=False, dropout=0.0):
@@ -212,51 +254,15 @@ class CustomSchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
 
      }
     return config
+
 #%%
-def test_set_results():
-    '''Results on the complete test set'''
-    prefix =  '/mnt/pool-cox-data08/Juan/ccs/models/transformer'
-    model_ch2, _ = architecture()
-    model_ch2.load_weights(prefix+'_ch2/checkpoints/best')
-    model_ch3, _ = architecture()
-    model_ch3.load_weights(prefix+'_ch3/checkpoints/best')
-    model_ch4, _ = architecture()
-    model_ch4.load_weights(prefix+'_ch4/checkpoints/best')
-
-    prefix = '/mnt/pool-cox-data08/Juan/ccs/Data/'
-    df_fig4 = pd.read_pickle(prefix+'Fig4_powerlaw.pkl')
-    features_fig4 = np.load(prefix+'encoded_fig4.npy', allow_pickle=True)
-
-    df_fig4['transformer'] = 0
-    df_fig4.loc[df_fig4['Charge']==2,'transformer'] = model_ch2.predict(features_fig4[features_fig4[:,-1]==2][:,:-1]).flatten() + df_fig4.loc[df_fig4['Charge']==2,'predicted_ccs']
-    df_fig4.loc[df_fig4['Charge']==3,'transformer'] = model_ch3.predict(features_fig4[features_fig4[:,-1]==3][:,:-1]).flatten() + df_fig4.loc[df_fig4['Charge']==3,'predicted_ccs']
-    df_fig4.loc[df_fig4['Charge']==4,'transformer'] = model_ch4.predict(features_fig4[features_fig4[:,-1]==4][:,:-1]).flatten() + df_fig4.loc[df_fig4['Charge']==4,'predicted_ccs']
-
-    fig, ax = plt.subplots(nrows = 1, ncols = 2, figsize = (20, 6))
-    res_rel = (df_fig4['CCS']-df_fig4['transformer'])/df_fig4['transformer']*100
-    ax[0].hist(res_rel, bins = 50, label = f'MAD = {np.round(scipy.stats.median_abs_deviation(res_rel), 4)}')
-    ax[0].set_xlabel('Relative Error of CCS')
-    ax[0].set_ylabel('Counts')
-    ax[0].set_title('Relative error of CCS w.r.t Ground Truth')
-    ax[0].legend()
-
-    corr, _ = scipy.stats.pearsonr(df_fig4['transformer'],df_fig4['CCS'])
-    print(f'The correlation is: {corr}')
-    ax[1].scatter(df_fig4['CCS'], df_fig4['transformer'], label = f'Corr : {np.round(corr, 5)}', s = 0.1)
-    ax[1].set_xlabel('CCS')
-    ax[1].set_ylabel('Predicted CCS')
-    ax[1].set_title('Scatter Plot CCS vs predicted CCS')
-    ax[1].plot(np.arange(300,800), np.arange(300,800), 'b--')
-    ax[1].legend()
-#%%
-def architecture():
-  num_layers = 4
-  d_model = 128
-  dff = 512
-  num_heads = 8
+def architecture(x_train):
+  num_layers = 1
+  d_model = 256
+  dff = 32
+  num_heads = 2
   dropout_rate = 0.1
-  input_vocab_size = 27+1
-  target_vocab_size = 1
+  input_vocab_size = 2
   #%%
   input = tf.keras.layers.Input(shape=(None,))
   target = tf.keras.layers.Input(shape=(None,))
@@ -275,27 +281,19 @@ def architecture():
   model.summary()
   optimizer = tf.keras.optimizers.Adam(CustomSchedule(d_model), beta_1=0.9, beta_2=0.98, 
                                      epsilon=1e-9)
-  return model, optimizer
+  return model, 'adam'
+#%%
+charge = 3
+x_train, x_test, y_train, y_test = train_val_set(charge = charge)
+x_train = np.asarray(x_train)
+y_train = np.asarray(y_train)
+x_test = np.asarray(x_test)
+y_test = np.asarray(y_test)
 #%%
 loss = tf.keras.losses.MeanSquaredError(reduction = 'none')
+model, optimizer = architecture(x_train)
 
-def masked_loss(real, pred):
-  mask = tf.math.logical_not(tf.math.equal(real, 22))
-  loss_ = loss(real, pred)
-
-  mask = tf.cast(mask, dtype=loss_.dtype)
-  loss_ *= mask
-
-  return tf.reduce_sum(loss_)/tf.reduce_sum(mask)
-
-metrics = [loss, masked_loss]
-#%%
-
-model, optimizer = architecture()
-model.compile(optimizer=optimizer, loss = loss, metrics = metrics) # masked_
-#%%
-charge = 4
-x_train, x_test, y_train, y_test = train_val_set(charge = charge)
+model.compile(optimizer=optimizer, loss = loss) # masked_
 #%%
 folder = f"{path['models']}transformer_ch{charge}{path['sep']}"
 cb = [tf.keras.callbacks.CSVLogger(f"{folder}training.log", append=False),  
@@ -303,6 +301,6 @@ cb = [tf.keras.callbacks.CSVLogger(f"{folder}training.log", append=False),
         save_weights_only = True)]
 
 history = model.fit(
-    x_train, y_train, batch_size=8, epochs=30, validation_data=(x_test, y_test), callbacks=cb
+    x_train, y_train, batch_size=64, epochs=30, validation_data=(x_test, y_test), callbacks=cb
 )
 # %%
