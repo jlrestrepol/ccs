@@ -301,5 +301,5 @@ if __name__ == "__main__":
     folder = f"{path['models']}transformer_ch4{path['sep']}"
     diagnostic_plot(folder+'training.log')
 #%%
-diagnostic_plot('../models/transformer_ch2/training.log')
+diagnostic_plot(f"{path['models']}transformer_ch4{path['sep']}training.log")
 # %%
