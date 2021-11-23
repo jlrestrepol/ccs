@@ -1,6 +1,7 @@
 Data/
 data/
 models/
+*/wandb/*
 models/*
 .DS_Store
 .ipynb_checkpoints
