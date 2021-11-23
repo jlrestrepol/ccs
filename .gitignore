@@ -16,4 +16,5 @@ script.py
 .vscode
 *.zip
 *.csv
+*.pkl
 paths.py
