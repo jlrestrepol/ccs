@@ -18,13 +18,13 @@ print(proteins_list_nested)
 
 # %%
 def flatten(items):#flattens list
-    ...:     """Yield items from any nested iterable."""
-    ...:     for x in items:
-    ...:         if isinstance(x, Iterable) and not isinstance(x, (str, bytes)):
-    ...:             for sub_x in flatten(x):
-    ...:                 yield sub_x
-    ...:         else:
-    ...:             yield x
+     """Yield items from any nested iterable."""
+     for x in items:
+         if isinstance(x, Iterable) and not isinstance(x, (str, bytes)):
+             for sub_x in flatten(x):
+                 yield sub_x
+         else:
+             yield x
 #%%
 proteins_list = list(flatten(proteins_list_nested.values.tolist()))
 np.save(folder_path+'protein_list', proteins_list)

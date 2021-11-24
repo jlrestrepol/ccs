@@ -1,4 +1,8 @@
 Data/
+data/
+models/
+*/wandb/*
+models/*
 .DS_Store
 .ipynb_checkpoints
 *checkpoint*
@@ -12,3 +16,5 @@ script.py
 .vscode
 *.zip
 *.csv
+*.pkl
+paths.py

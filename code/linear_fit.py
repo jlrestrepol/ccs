@@ -2,12 +2,14 @@
 import numpy as np
 import pandas as pd
 import Bio.PDB
+from Bio.PDB.Polypeptide import PPBuilder
 from itertools import chain
 from skspatial.objects import Line, Points
 import matplotlib.pyplot as plt
 import seaborn as sns
 import json
 import os
+import pickle
 
 #%%
 
@@ -38,13 +40,14 @@ def one_fit(file_name = '/200/ranked_1.pdb'):
     return rmse
 
 #%%
-def main():
-    data_folder = '/fs/pool/pool-cox-projects-fold/predictions/full_dbs/fasta'
+def predicted(data_folder = '/fs/pool/pool-cox-projects-fold/predictions/full_dbs/fasta'):
     rmse_list = []
+    seq_list = []
+    i = 0
+    print("Walking through dir")
     for root,dirs,files in os.walk(data_folder):
         #go through roots that don't end in fasta or msas and only take ones that are completed
         if not (root.endswith(("fasta","msas"))) and len(files)==23:
-
             f=os.path.join(root,"ranking_debug.json")
             with open(f) as json_data:
                 data=json.load(json_data)
@@ -55,6 +58,9 @@ def main():
 
                 if best_score > 70: #Only take files whose score is above 70
                     structure_alpha = Bio.PDB.PDBParser().get_structure("alpha",root+"/ranked_1.pdb")
+                    ppb=PPBuilder()
+                    seq = str([pp.get_sequence() for pp in ppb.build_peptides(structure_alpha)][0])
+                    seq_list.append(seq)
                     model_alpha = structure_alpha[0]
                     chain_a = model_alpha['A']
                     coords_one = np.fromiter( chain.from_iterable(res["CA"].coord for res in chain_a), dtype = 'f8', count = -1).reshape((-1, 3))
@@ -63,15 +69,115 @@ def main():
                     residuals = np.fromiter((line_fit.distance_point(point) for point in points), dtype = 'f8', count = -1)
                     rmse = np.sqrt((residuals*residuals).sum()/coords_one.shape[0])
                     rmse_list.append(rmse)
-    
+                    if i % 1000 == 0:
+                        print(f'{i} structures with good confidence fitted')
+                    i += 1
+    print("Plotting histogram")
+    fig = plt.figure(figsize = (6,8))
+    ax=fig.add_subplot(111)
     ax = sns.histplot(rmse_list)
     ax.set_xlabel('RMSE')
     ax.set_ylabel('Counts')
     ax.set_title('Distribution of RMSE-PLDDT>70')
     
-    return rmse_list
+    return rmse_list, seq_list
+
+#%%
+def downloaded():
+    alpha_folder = '../Data/AlphaFold/'
+    combined_folder = '../Data/Combined/'
+    suffix = '-F1-model_v1.pdb'
+    rmse_list = []
+    seq_list = []
+    count_no_match = 0
+    i = 0
+    files = ['CAEEL.h5' ,'DROME.h5' ,'ECOLI.h5', 'HUMAN.h5', 'YEAST.h5']
+    for file in files:
+        df = pd.read_hdf(combined_folder+file)
+        df_filt = df[~df['Distance_matrix'].isna()]#Drop rows without distance matrix calculation
+        organism = file[:file.find('.')]#Get the organism from file name
+        pep_list = df_filt['Sequence'].values
+
+        for index, (label, prot_id) in enumerate(df_filt['Proteins'].items()):
+            #Get the data from the .pdb file
+            
+            file_path = alpha_folder+organism+'/AF-'+prot_id+suffix
+            if not os.path.exists(file_path):#If protein name file is not present in Alpha Fold folder
+                count_no_match += 1
+                print(pep_list[index], prot_id+' not found, total not found: '+str(count_no_match), 'index: '+str(index))
+                continue
+
+            parser = Bio.PDB.PDBParser()# create parser
+            structure_alpha = parser.get_structure("alpha",file_path)#get structure
+            model_alpha = structure_alpha[0]#get model
+            chain_a = model_alpha['A']
+            ppb=PPBuilder()#polypeptide builder
+            seq_prot = str([pp.get_sequence() for pp in ppb.build_peptides(structure_alpha)][0])#get seq of protein
+            seq_pep = pep_list[index]#get seq of peptide
+            #Find position of peptide in protein
+            start_index = seq_prot.find(seq_pep)
+            final_index = start_index + len(seq_pep)
+            if start_index == -1:
+                print(f"Peptide {seq_pep} not found in {prot_id}")
+            if final_index == start_index:
+                print(f"Final index = start index, len of pep = {len(seq_pep)}")
+            
+            #Get 3D coords of residuals of the whole protein
+            coords_prot = np.fromiter( chain.from_iterable(res["CA"].coord for res in chain_a), dtype = 'f8', count = -1).reshape((-1, 3))
+            coords_one = coords_prot[start_index:final_index, :]#Extract coords of peptide
+            if coords_one.shape[0] == 0:
+                print(f"Start index = {start_index}, Final index = {final_index}, coords_prot = {coords_prot.shape}")                
+            #Perform the fit
+            points = Points(coords_one)
+            line_fit = Line.best_fit(points)
+            residuals = np.fromiter((line_fit.distance_point(point) for point in points), dtype = 'f8', count = -1)
+            rmse = np.sqrt((residuals*residuals).sum()/coords_one.shape[0])
+            rmse_list.append(rmse)
+            seq_list.append(seq_pep)
+            if i%500 == 0:
+                print(f'{i} read out of {df_filt.shape[0]} in organism {organism}')
+                print(f'Peptide {seq_pep} found in {prot_id} in pos {start_index}')
+            i += 1
+    
+    return rmse_list, seq_list
+#%%
+def scatter_plot(rmse_list, seq_list):
+    rmse_array = np.array(rmse_list)
+    seq_array = np.array(seq_list)
+    second_peak = seq_array[(rmse_array>2.07) & (rmse_array<2.404)]
+
+    df = pd.read_csv('../dl_paper/SourceData_Figure_1.csv')
+    seqs_fig1 = df['Modified sequence'].str.replace('_','')
+    df['Modified sequence'] = seqs_fig1
+    set_af = set(second_peak)
+    set_exp = set(seqs_fig1)
+    inters = set_af.intersection(set_exp)
+    df.set_index('Modified sequence', inplace = True)
+    df_inters = df.loc[list(inters)]
+    #%%
+    fig = plt.figure(figsize = (12,18))
+    ax=fig.add_subplot(111)
+    fig.set_size_inches((16, 8))
+    scatter = plt.scatter(df['m/z'], df['CCS'], c = df['Charge'], s = 0.01)
+    scatter2 = plt.scatter(df_inters['m/z'], df_inters['CCS'], c = 'green', s = 0.1)
+    plt.xlabel('m/z')
+    plt.ylabel(r'CCA ($A^2$)')
+    plt.title('Scatter plot: CCA vs m/z')
+    plt.legend(*scatter.legend_elements(), title = 'Charges')
+
+
 #%%
 if __name__ == '__main__':
-    main()
+    rmse_list, seq_list = downloaded()
+    
+    with open("rmse_list.pkl", "wb") as fp:
+        pickle.dump(rmse_list, fp)
+
+    with open("seq_list.pkl", "wb") as fp:
+        pickle.dump(seq_list, fp)
+
+    rmse_list = pd.read_pickle('rmse_list.pkl')    
+    seq_list = pd.read_pickle('seq_list.pkl')
+    scatter_plot(rmse_list, seq_list)
 
 # %%
