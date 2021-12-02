@@ -40,14 +40,14 @@ def one_fit(file_name = '/200/ranked_1.pdb'):
     return rmse
 
 #%%
-def predicted():
-    data_folder = '/fs/pool/pool-cox-projects-fold/predictions/full_dbs/fasta'
+def predicted(data_folder = '/fs/pool/pool-cox-projects-fold/predictions/full_dbs/fasta'):
     rmse_list = []
     seq_list = []
+    i = 0
+    print("Walking through dir")
     for root,dirs,files in os.walk(data_folder):
         #go through roots that don't end in fasta or msas and only take ones that are completed
         if not (root.endswith(("fasta","msas"))) and len(files)==23:
-
             f=os.path.join(root,"ranking_debug.json")
             with open(f) as json_data:
                 data=json.load(json_data)
@@ -69,7 +69,10 @@ def predicted():
                     residuals = np.fromiter((line_fit.distance_point(point) for point in points), dtype = 'f8', count = -1)
                     rmse = np.sqrt((residuals*residuals).sum()/coords_one.shape[0])
                     rmse_list.append(rmse)
-    
+                    if i % 1000 == 0:
+                        print(f'{i} structures with good confidence fitted')
+                    i += 1
+    print("Plotting histogram")
     fig = plt.figure(figsize = (6,8))
     ax=fig.add_subplot(111)
     ax = sns.histplot(rmse_list)
@@ -138,6 +141,32 @@ def downloaded():
     
     return rmse_list, seq_list
 #%%
+def scatter_plot(rmse_list, seq_list):
+    rmse_array = np.array(rmse_list)
+    seq_array = np.array(seq_list)
+    second_peak = seq_array[(rmse_array>2.07) & (rmse_array<2.404)]
+
+    df = pd.read_csv('../dl_paper/SourceData_Figure_1.csv')
+    seqs_fig1 = df['Modified sequence'].str.replace('_','')
+    df['Modified sequence'] = seqs_fig1
+    set_af = set(second_peak)
+    set_exp = set(seqs_fig1)
+    inters = set_af.intersection(set_exp)
+    df.set_index('Modified sequence', inplace = True)
+    df_inters = df.loc[list(inters)]
+    #%%
+    fig = plt.figure(figsize = (12,18))
+    ax=fig.add_subplot(111)
+    fig.set_size_inches((16, 8))
+    scatter = plt.scatter(df['m/z'], df['CCS'], c = df['Charge'], s = 0.01)
+    scatter2 = plt.scatter(df_inters['m/z'], df_inters['CCS'], c = 'green', s = 0.1)
+    plt.xlabel('m/z')
+    plt.ylabel(r'CCA ($A^2$)')
+    plt.title('Scatter plot: CCA vs m/z')
+    plt.legend(*scatter.legend_elements(), title = 'Charges')
+
+
+#%%
 if __name__ == '__main__':
     rmse_list, seq_list = downloaded()
     
@@ -147,40 +176,8 @@ if __name__ == '__main__':
     with open("seq_list.pkl", "wb") as fp:
         pickle.dump(seq_list, fp)
 
-#%%    
-rmse_list = pd.read_pickle('rmse_list.pkl')    
-seq_list = pd.read_pickle('seq_list.pkl')
-rmse_array = np.array(rmse_list)
-seq_array = np.array(seq_list)
-second_peak = seq_array[(rmse_array>2.07) & (rmse_array<2.404)]
-fig = plt.figure(figsize = (8,6))
-ax=fig.add_subplot(111)
-ax.hist(rmse_list, bins =50)
-ax.set_xlabel('RMSE')
-ax.set_ylabel('Counts')
-ax.set_title('Distribution of RMSE-PLDDT>70')
-
-
-#%%
-df = pd.read_csv('../dl_paper/SourceData_Figure_1.csv')
-seqs_fig1 = df['Modified sequence'].str.replace('_','')
-df['Modified sequence'] = seqs_fig1
-set_af = set(second_peak)
-set_exp = set(seqs_fig1)
-inters = set_af.intersection(set_exp)
-df.set_index('Modified sequence', inplace = True)
-df_inters = df.loc[list(inters)]
-#%%
-fig = plt.figure(figsize = (12,18))
-ax=fig.add_subplot(111)
-fig.set_size_inches((16, 8))
-scatter = plt.scatter(df['m/z'], df['CCS'], c = df['Charge'], s = 0.01)
-scatter2 = plt.scatter(df_inters['m/z'], df_inters['CCS'], c = 'green', s = 0.1)
-plt.xlabel('m/z')
-plt.ylabel(r'CCA ($A^2$)')
-plt.title('Scatter plot: CCA vs m/z')
-plt.legend(*scatter.legend_elements(), title = 'Charges')
-
-
+    rmse_list = pd.read_pickle('rmse_list.pkl')    
+    seq_list = pd.read_pickle('seq_list.pkl')
+    scatter_plot(rmse_list, seq_list)
 
 # %%
