@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
 from pyteomics import mass, parser
-import numba  as nb
 import re
 
 aa2formula = {
