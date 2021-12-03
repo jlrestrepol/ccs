@@ -13,11 +13,12 @@ import sys
 import paths
 #%%
 global path
-path = paths.get_paths()
-device_name = tf.test.gpu_device_name()
-if device_name != '/device:GPU:0':
-  raise SystemError('GPU device not found')
-print('Found GPU at: {}'.format(device_name))
+#%%
+def check_gpu():
+    device_name = tf.test.gpu_device_name()
+    if device_name != '/device:GPU:0':
+        raise SystemError('GPU device not found')
+    print('Found GPU at: {}'.format(device_name))
 #%%
 class MultiHeadSelfAttention(layers.Layer):
     def __init__(self, embed_dim, num_heads=8):
@@ -292,6 +293,7 @@ def train(charge):
 
 #%%
 if __name__ == "__main__":
+    path = paths.get_paths()
     train(charge = 2)
     folder = f"{path['models']}transformer_ch2{path['sep']}"
     train(charge = 3)
@@ -301,5 +303,5 @@ if __name__ == "__main__":
     folder = f"{path['models']}transformer_ch4{path['sep']}"
     diagnostic_plot(folder+'training.log')
 #%%
-diagnostic_plot(f"{path['models']}transformer_ch4{path['sep']}training.log")
+    diagnostic_plot(f"{path['models']}transformer_ch4{path['sep']}training.log")
 # %%
