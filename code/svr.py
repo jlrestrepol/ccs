@@ -17,10 +17,11 @@ import joblib
 import paths
 #%%
 def train_test_set(charge, name):
+    _, data_name, _ = get_names(name)
     prefix_data = paths.get_paths()['data']
     fig1 = pd.read_pickle(prefix_data+'Fig1_powerlaw.pkl')
-    print(prefix_data+name)
-    features_complete =  np.load(prefix_data+name, allow_pickle=True)
+    print(prefix_data+data_name)
+    features_complete =  np.load(prefix_data+data_name, allow_pickle=True)
     label_complete = (fig1['CCS'] - fig1['predicted_ccs']).values
 
     print('Take specific charge state')
@@ -47,15 +48,19 @@ def get_names(name):
 
     model_name = {'Counts':'svr_count', 'Di-peptides':'svr_dip',
     'Extended':'svr_extended', 'Dip-hel':'svr_dip_hel'}
-    data_name = {'One hot encoded':'one_hot_encoded_fig4.npy',
+    data_name = {'One hot encoded':'one_hot_encoded_fig1.npy',
+    'Counts':'counts_fig1.npy', 'Di-peptides':'dipeptide_fig1.npy', 
+    'Tri-peptides' : 'tripeptides_fig1.npy',
+    'Extended':'extended_fig1.npy', 'Dip-hel':'dip_hel_fig1.npy'}
+    test_data_name = {'One hot encoded':'one_hot_encoded_fig4.npy',
     'Counts':'counts_fig4.npy', 'Di-peptides':'dipeptide_fig4.npy', 
     'Tri-peptides' : 'tripeptides_fig4.npy',
     'Extended':'extended_fig4.npy', 'Dip-hel':'dip_hel_fig4.npy'}
-    return model_name[name], data_name[name]
+    return model_name[name], data_name[name], test_data_name[name]
 #%%
 def test_set_results(name):
     '''Results on the complete test set'''
-    model_name, data_name = get_names(name)
+    model_name, _, data_name = get_names(name)
     prefix_models = paths.get_paths()['models']
     #prefix_models = ''
     #model_name = '.'
@@ -104,9 +109,9 @@ def test_set_results(name):
 
     return df_fig4['svr']
 # %%
-def test_set_one_charge_results(model, charge, scaler):
+def test_set_one_charge_results(model, charge, name):
     '''Plots results on the test set'''
-    data = 'counts_fig4.npy'
+    _, _, data = get_names(name)
     prefix_data = paths.get_paths()['data']
 
     df_fig4 = pd.read_pickle(prefix_data+'/Fig4_powerlaw.pkl')
