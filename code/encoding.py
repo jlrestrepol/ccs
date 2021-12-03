@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import sklearn.preprocessing as sk_pp
 from sklearn.feature_extraction.text import CountVectorizer
+import paths
 
 # %%
 def prepare_data(df, encoder, inplace = False):
@@ -62,7 +63,8 @@ model_params = {"lab_name": "label", "fname": "cache/one_dat_cache_full_label.np
 ########### Encode Sequence #############
 def encode_seq(check = True, save = False):
     """Reads-in the raw data, fits a encoder to it, transforms it and saves it"""
-    df = pd.read_csv('../dl_paper/SourceData_Figure_1.csv').loc[:,['Modified sequence', 'Charge']]
+    prefix_data = paths.get_paths()['data']
+    df = pd.read_csv(prefix_data+'SourceData_Figure_1.csv').loc[:,['Modified sequence', 'Charge']]
     data = df['Modified sequence']
     label_encoder = fit_encoder(data)#I dont specify the vocabulary, but every aa/symbol should be present anyway
     pp_data = prepare_data(df, label_encoder)
@@ -75,7 +77,6 @@ def encode_seq(check = True, save = False):
         print(f"Was the reconstruction perfect? {np.array_equal(df['Modified sequence'].str.replace('_','').to_list(), decoded)}")
 
     if save:#save the matrix
-        prefix_data = '/mnt/pool-cox-data08/Juan/ccs/Data/'
         np.save(prefix_data+'encoded_fig1', encoded, allow_pickle=True)
 
     return encoded
@@ -83,7 +84,7 @@ def encode_seq(check = True, save = False):
 ############### Transform to one-hot-encoded ###################
 def ohe_seq(save = False):
     """Reads-in the encoded sequence, fits a ohe on the training data with specified categories and transform the data"""
-    prefix_data = '/mnt/pool-cox-data08/Juan/ccs/Data/'
+    prefix_data = paths.get_paths()['data']
     encoded_fig1 = np.load(prefix_data+'encoded_fig1.npy')
     encoded_fig4 = np.load(prefix_data+'encoded_fig4.npy')
     oh_encoder = sk_pp.OneHotEncoder(sparse = False, categories = [np.arange(27)]*66, dtype=np.int8)#Initializes ohe with given classes
@@ -99,7 +100,7 @@ def ohe_seq(save = False):
 ############ Transfor to Count Matrix ##############
 def count_seq(save = False):
     """Read-in the ohe sequences and creates from it a count matrix of aa"""
-    prefix_data = '/mnt/pool-cox-data08/Juan/ccs/Data/'
+    prefix_data = paths.get_paths()['data']
     encoded_fig1 = np.load(prefix_data+'encoded_fig1.npy')
     counts_matrix = np.zeros((encoded_fig1.shape[0], 27), dtype=np.int8)
     for i, row in enumerate(encoded_fig1):
@@ -116,8 +117,9 @@ def count_seq(save = False):
 def dipeptides_seq(save = False):
     """Read-in raw data, create vocabulary of dipeptides, fit a CountVectorizer object to get count of dipeptides"""
     
-    df = pd.read_csv('../dl_paper/SourceData_Figure_4.csv').loc[:,['Modified_sequence', 'Charge']]
-    seqs = df['Modified_sequence'].str.replace('_','')
+    prefix_data = paths.get_paths()['data']
+    df = pd.read_csv(prefix_data+'SourceData_Figure_1.csv').loc[:,['Modified sequence', 'Charge']]
+    seqs = df['Modified sequence'].str.replace('_','')
     aa = ['(', ')', 'A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M','N', 'P', 'Q', 'R', 'S', 
     'T', 'V', 'W', 'Y', 'a', 'c', 'o','x']
     voc = [l2+l1 for l1 in aa for l2 in aa]#Creates vocabulary of dipeptides
@@ -127,17 +129,16 @@ def dipeptides_seq(save = False):
     dipeptides['Charge'] = df['Charge']
     
     if save:
-        prefix_data = '/mnt/pool-cox-data08/Juan/ccs/Data/'
         #dipeptides.to_pickle(prefix_data+'dipeptide_fig4.pkl')
-        np.save(prefix_data+'dipeptide_fig4', dipeptides.values, allow_pickle=True)
+        np.save(prefix_data+'dipeptide_fig1', dipeptides.values, allow_pickle=True)
 
     return dipeptides
 
 ########## Tripeptides ############
 def tripeptides_seq(save = False):
     """Read-in raw data, create vocabulary of tripeptides, fit a CountVectorizer object to get count of dipeptides"""
-
-    df = pd.read_csv('../dl_paper/SourceData_Figure_4.csv').loc[:,['Modified_sequence', 'Charge']]
+    prefix_data = paths.get_paths()['data']
+    df = pd.read_csv(prefix_data+'SourceData_Figure_4.csv').loc[:,['Modified_sequence', 'Charge']]
     seqs = df['Modified_sequence'].str.replace('_','')
     aa = ['(', ')', 'A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M','N', 'P', 'Q', 'R', 'S', 
     'T', 'V', 'W', 'Y', 'a', 'c', 'o','x']
@@ -155,8 +156,8 @@ def tripeptides_seq(save = False):
 ######### Period 4 ##########
 def helix_seq(save = False, helix_dip = True):
     """Read-in raw data, creates 5-pep vocab, creates count matrix and then sums up the terms correspondent to the same start/end character"""
-
-    df = pd.read_csv('../dl_paper/SourceData_Figure_1.csv').loc[:,['Modified sequence', 'Charge']]
+    prefix_data = paths.get_paths()['data']
+    df = pd.read_csv(prefix_data+'SourceData_Figure_1.csv').loc[:,['Modified sequence', 'Charge']]
     seqs = df['Modified sequence'].str.replace('_','')
     aa = ['(', ')', 'A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M','N', 'P', 'Q', 'R', 'S', 
     'T', 'V', 'W', 'Y', 'a', 'c', 'o','x']
@@ -169,12 +170,12 @@ def helix_seq(save = False, helix_dip = True):
     #After manually inspecting the sequence, it looks fine
 
     if save:
-        prefix_data = '/mnt/pool-cox-data08/Juan/ccs/Data/'
         np.save(prefix_data+'period1_fig1', period4, allow_pickle=True)
     
     if helix_dip:# Merge helix and di-peptides
-        prefix_data = '/mnt/pool-cox-data08/Juan/ccs/Data/'
-        dipeptides = np.load(prefix_data+'dipeptide_fig4.npy', allow_pickle = True)
+        dipeptides = np.load(prefix_data+'dipeptide_fig1.npy', allow_pickle = True)
         dip_hel = np.append(period4, dipeptides, axis = 1)#appends helix and dipeptides
         if save:
-            np.save(prefix_data+'dip_hel_fig4.npy', dip_hel, allow_pickle=True)
+            np.save(prefix_data+'dip_hel_fig1.npy', dip_hel, allow_pickle=True)
+
+# %%
