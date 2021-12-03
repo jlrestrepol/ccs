@@ -14,9 +14,10 @@ import seaborn as sns
 import scipy
 patch_sklearn()
 import joblib
+import paths
 #%%
 def train_test_set(charge, name):
-    prefix_data = '/mnt/pool-cox-data08/Juan/ccs/Data/'
+    prefix_data = paths.get_paths()['data']
     fig1 = pd.read_pickle(prefix_data+'Fig1_powerlaw.pkl')
     print(prefix_data+name)
     features_complete =  np.load(prefix_data+name, allow_pickle=True)
@@ -55,14 +56,14 @@ def get_names(name):
 def test_set_results(name):
     '''Results on the complete test set'''
     model_name, data_name = get_names(name)
-    prefix_models = '/mnt/pool-cox-data08/Juan/ccs/models/'
+    prefix_models = paths.get_paths()['models']
     #prefix_models = ''
     #model_name = '.'
     svr_ch2 = joblib.load(prefix_models+model_name+'/svr_ch2')
     svr_ch3 = joblib.load(prefix_models+model_name+'/svr_ch3')
     svr_ch4 = joblib.load(prefix_models+model_name+'/svr_ch4')
-    prefix_data = '/mnt/pool-cox-data08/Juan/ccs/Data/'
-    df_fig4 = pd.read_pickle('../Data/Fig4_powerlaw.pkl')
+    prefix_data = paths.get_paths()['data']
+    df_fig4 = pd.read_pickle(prefix_data+'Fig4_powerlaw.pkl')
     features_fig4 = np.load(prefix_data+data_name, allow_pickle=True)
     #features_fig4 = scaler.transform(features_fig4)
     print('Predicting')
@@ -106,7 +107,7 @@ def test_set_results(name):
 def test_set_one_charge_results(model, charge, scaler):
     '''Plots results on the test set'''
     data = 'counts_fig4.npy'
-    prefix_data = '/mnt/pool-cox-data08/Juan/ccs/Data/'
+    prefix_data = paths.get_paths()['data']
 
     df_fig4 = pd.read_pickle(prefix_data+'/Fig4_powerlaw.pkl')
     features_fig4 = np.load(prefix_data+data)
