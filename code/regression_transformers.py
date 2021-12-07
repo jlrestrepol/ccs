@@ -221,7 +221,8 @@ def architecutre(x_train):
     ff_dim = 32  # Hidden layer size in feed forward network inside transformer
     vocab_size = 27
     max_len = x_train.shape[1]
-
+    
+    print("Starts calling architecture routines")
     inputs = layers.Input(shape=(max_len,))
     embedding_layer = TokenAndPositionEmbedding(max_len, vocab_size, embed_dim)
     transformer_block1 = TransformerBlock(embed_dim, num_heads, ff_dim)
@@ -238,34 +239,70 @@ def architecutre(x_train):
     x = layers.Dropout(0.1)(x)
     outputs = layers.Dense(1)(x)
 
+    print("Calss keras.Model")
     model = keras.Model(inputs=inputs, outputs=outputs)
+    print("optimizer")
+    optimizer = tf.keras.optimizers.Adam(CustomSchedule(embed_dim), beta_1=0.9, beta_2=0.98, 
+                                     epsilon=1e-9)
+    print("Summary")
+    model.summary()
+    return model, optimizer
+#%%
+
+def architecture_seq_vec(x_train):
+    """Architecture of the predictor"""
+    embed_dim = 256  # Embedding size for each token
+    num_heads = 2  # Number of attention heads
+    ff_dim = 32  # Hidden layer size in feed forward network inside transformer
+    vocab_size = 27
+    max_len = x_train.shape[1]
+
+    inputs = layers.Input(shape=(max_len,))
+    input_vec = layers.Input((4,))
+    embedding_layer = TokenAndPositionEmbedding(max_len, vocab_size, embed_dim)
+    transformer_block1 = TransformerBlock(embed_dim, num_heads, ff_dim)
+    transformer_block2 = TransformerBlock(embed_dim, num_heads, ff_dim)
+    transformer_block3 = TransformerBlock(256, num_heads, ff_dim)
+    transformer_block4 = TransformerBlock(embed_dim, num_heads, ff_dim)
+    mask = create_padding_mask(inputs)
+    x = embedding_layer(inputs)
+    #x *= tf.math.sqrt(tf.cast(embed_dim, tf.float32))
+    x = transformer_block1(x, mask = mask)
+    x = layers.GlobalAveragePooling1D()(x)
+    x = layers.Dropout(0.1)(x)
+    x = layers.Concatenate()([x, input_vec])
+    x = layers.Dense(20, activation="relu")(x)
+    x = layers.Dropout(0.1)(x)
+    outputs = layers.Dense(1)(x)
+
+    model = keras.Model(inputs=[inputs,input_vec], outputs=outputs)
     optimizer = tf.keras.optimizers.Adam(CustomSchedule(embed_dim), beta_1=0.9, beta_2=0.98, 
                                      epsilon=1e-9)
     model.summary()
     return model, optimizer
+
 #%%
 class CustomSchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
-  def __init__(self, d_model, warmup_steps=4000):
-    super(CustomSchedule, self).__init__()
+    def __init__(self, d_model, warmup_steps=4000):
+        super(CustomSchedule, self).__init__()
 
-    self.d_model = d_model
-    self.d_model = tf.cast(self.d_model, tf.float32)
+        self.d_model = d_model
+        self.d_model = tf.cast(self.d_model, tf.float32)
 
-    self.warmup_steps = warmup_steps
+        self.warmup_steps = warmup_steps
 
-  def __call__(self, step):
-    arg1 = tf.math.rsqrt(step)
-    arg2 = step * (self.warmup_steps ** -1.5)
+    def __call__(self, step):
+        arg1 = tf.math.rsqrt(step)
+        arg2 = step * (self.warmup_steps ** -1.5)
 
-    return tf.math.rsqrt(self.d_model) * tf.math.minimum(arg1, arg2)
+        return tf.math.rsqrt(self.d_model) * tf.math.minimum(arg1, arg2)
   
-  def get_config(self):
-    config = {
-    'd_model': self.d_model,
-    'warmup_steps': self.warmup_steps,
-
-     }
-    return config
+    def get_config(self):
+        config = {
+        'd_model': self.d_model,
+        'warmup_steps': self.warmup_steps,
+         }
+        return config
 #%%
 def train(charge):
     x_train, x_test, y_train, y_test = train_val_set(charge = charge)
