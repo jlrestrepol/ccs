@@ -1,6 +1,8 @@
 #%%
+from numpy.core.numeric import cross
 import pandas as pd
 import numpy as np
+from sklearn.model_selection import cross_val_score
 import scipy
 import xgboost
 from hyperopt import hp, tpe, fmin, Trials, STATUS_OK
@@ -14,45 +16,50 @@ import scipy
 ############# Optimization routine #######################
 def objective(space):
     """Function that will be optimized"""
-    regressor = xgboost.XGBRegressor(n_estimators = space['n_estimators'],
+    regressor = xgboost.XGBRegressor(n_estimators = 180,
                             max_depth = int(space['max_depth']),
                             learning_rate = space['learning_rate'],
                             gamma = space['gamma'],
                             min_child_weight = space['min_child_weight'],
                             subsample = space['subsample'],
-                            colsample_bytree = space['colsample_bytree']
+                            colsample_bytree = 1.0
                             )
+    #regressor.fit(x_train_gl, y_train_gl)
     
-    regressor.fit(x_train, y_train)
+    #y_pred = regressor.predict(x_test_gl)
+    #mse = sk.metrics.mean_squared_error(y_test_gl, y_pred)
+    neg_mse = cross_val_score(regressor, x_train_gl, y=y_train_gl, scoring='neg_mean_squared_error',cv=5, n_jobs=-1).mean()
+    print ("Mean Squared Error: ", neg_mse)
     
-    y_pred = regressor.predict(x_test)
-    mse = sk.metrics.mean_squared_error(y_test, y_pred)
-    print ("Mean Squared Error: ", mse)
-    
-    return {'loss': mse, 'status': STATUS_OK, 'model': regressor}
+    return {'loss': -neg_mse, 'status': STATUS_OK, 'model': regressor}
 
-def optimize(n_trials = 20, save_model = False, file_name = ""):
+def optimize(n_trials = 20, save_model = False, file_name = "", x_train=None, y_train=None, x_test=None, y_test=None):
 
     """Runs Bayesian hyperparameter optimization on XGBoost"""
     space = {
     'max_depth' : hp.choice('max_depth', range(5, 30, 1)),
     'learning_rate' : hp.quniform('learning_rate', 0.01, 0.5, 0.01),
     'n_estimators' : hp.choice('n_estimators', range(20, 205, 5)),
-    'gamma' : hp.quniform('gamma', 0, 0.50, 0.01),
+    'gamma' : hp.quniform('gamma', 0, 0.50, 0.1),
     'min_child_weight' : hp.quniform('min_child_weight', 1, 10, 1),
-    'subsample' : hp.quniform('subsample', 0.1, 1, 0.01),
-    'colsample_bytree' : hp.quniform('colsample_bytree', 0.1, 1.0, 0.01)}
+    'subsample' : hp.quniform('subsample', 0.1, 1, 0.1),
+    'colsample_bytree' : hp.quniform('colsample_bytree', 0.1, 1.0, 0.1)}
 
     tpe_algo = tpe.suggest
     tpe_trials = Trials()
-
     # Run 100 evals with the tpe algorithm
+    global x_train_gl, y_train_gl, x_test_gl, y_test_gl
+    x_train_gl = x_train
+    y_train_gl = y_train
+    x_test_gl = x_test
+    y_test_gl = y_test
+
     tpe_best = fmin(fn=objective, space=space, 
                     algo=tpe_algo, trials=tpe_trials, 
                     max_evals=n_trials)
     
     xgb_best_bay = xgboost.XGBRegressor(**tpe_best)#Instantiates best regressor
-    xgb_best_bay.fit(x_train, y_train)#Fit best
+    xgb_best_bay.fit(x_train_gl, y_train_gl)#Fit best
     
     if save_model:
         joblib.dump(xgb_best_bay, file_name)#Saves the best model
