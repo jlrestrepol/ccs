@@ -16,13 +16,20 @@ patch_sklearn()
 import joblib
 import paths
 #%%
-def train_test_set(charge, name):
+def train_test_set(charge, name, add_rt = False):
     _, data_name, _ = get_names(name)
     prefix_data = paths.get_paths()['data']
     fig1 = pd.read_pickle(prefix_data+'Fig1_powerlaw.pkl')
-    print(prefix_data+data_name)
+    print(prefix_data+data_name, add_rt)
     features_complete =  np.load(prefix_data+data_name, allow_pickle=True)
     label_complete = (fig1['CCS'] - fig1['predicted_ccs']).values
+    if add_rt:
+        features_complete = np.hstack((fig1['Retention time'].values[:,None], features_complete))
+        mask = fig1['Retention time'].values < 120
+        features_complete = features_complete[mask]
+        label_complete = label_complete[mask]
+    ss = StandardScaler()
+    features_complete[:,:-1] = ss.fit_transform(features_complete[:,:-1])#Fit transform excluding charge
 
     print('Take specific charge state')
     features_ch2 = features_complete[features_complete[:,-1] == charge]
@@ -58,18 +65,32 @@ def get_names(name):
     'Extended':'extended_fig4.npy', 'Dip-hel':'dip_hel_fig4.npy'}
     return model_name[name], data_name[name], test_data_name[name]
 #%%
-def test_set_results(name):
+def test_set_results(name, add_rt = False):
     '''Results on the complete test set'''
-    model_name, _, data_name = get_names(name)
+    model_name, data_train, data_name = get_names(name)
     prefix_models = paths.get_paths()['models']
     #prefix_models = ''
     #model_name = '.'
-    svr_ch2 = joblib.load(prefix_models+model_name+'/svr_ch2')
-    svr_ch3 = joblib.load(prefix_models+model_name+'/svr_ch3')
-    svr_ch4 = joblib.load(prefix_models+model_name+'/svr_ch4')
+    svr_ch2 = joblib.load(prefix_models+model_name+'/svr_ch2_rt')
+    svr_ch3 = joblib.load(prefix_models+model_name+'/svr_ch3_rt')
+    svr_ch4 = joblib.load(prefix_models+model_name+'/svr_ch4_rt')
     prefix_data = paths.get_paths()['data']
-    df_fig4 = pd.read_pickle(prefix_data+'Fig4_powerlaw.pkl')
+    df_fig4 = pd.read_pickle(prefix_data+'Fig4_with_RT.pkl')
+    fig1 = pd.read_pickle(prefix_data+'Fig1_powerlaw.pkl')
     features_fig4 = np.load(prefix_data+data_name, allow_pickle=True)
+    features_fig1 =  np.load(prefix_data+data_train, allow_pickle=True)
+    if add_rt:
+        features_fig4 = np.hstack((df_fig4['Retention time'].values[:,None], features_fig4))
+        features_fig1 = np.hstack((fig1['Retention time'].values[:,None], features_fig1))
+        mask4 = df_fig4['Retention time'].values < 120
+        mask1 = fig1['Retention time'].values < 120
+        features_fig1 = features_fig1[mask1]
+        features_fig4 = features_fig4[mask4]
+
+    ss = StandardScaler()
+    ss.fit(features_fig1[:,:-1])#Fit transform excluding charge
+    features_fig4[:,:-1] = ss.transform(features_fig4[:,:-1])#Fit transform excluding charge
+
     #features_fig4 = scaler.transform(features_fig4)
     print('Predicting')
     df_fig4['svr'] = 0
@@ -111,7 +132,7 @@ def test_set_results(name):
 # %%
 def test_set_one_charge_results(model, charge, name):
     '''Plots results on the test set'''
-    _, _, data = get_names(name)
+    _, ddata_train, data = get_names(name)
     prefix_data = paths.get_paths()['data']
 
     df_fig4 = pd.read_pickle(prefix_data+'/Fig4_powerlaw.pkl')
@@ -141,24 +162,24 @@ def test_set_one_charge_results(model, charge, name):
     ax[1].plot(np.arange(300,600), np.arange(300,600), 'b--')
     ax[1].legend(loc = 'lower right')
 #%%
-def train(charge, name, save = False):
-    _, data = get_names(name)
-    x_train, x_test, y_train, y_test = train_test_set(charge, data)
+def train(charge, name, save = False, n_estimators = 10, n_jobs = -1, add_rt=False):
+    _, data, _ = get_names(name)
+    x_train, x_test, y_train, y_test = train_test_set(charge, name, add_rt=add_rt)
     x_train = np.append(x_train, x_test, axis = 0)
     y_train = np.append(y_train, y_test, axis = 0)
     #ss = StandardScaler()
     #x_train = ss.fit_transform(x_train)
     print('Starting Training')
     start = time.time()
-    n_estimators = 10
     regr = BaggingRegressor(base_estimator=LinearSVR(dual =False, loss='squared_epsilon_insensitive'), n_estimators=n_estimators, 
-    random_state=0, n_jobs=-1, max_samples= 1.0/n_estimators, verbose = 1)
+    random_state=0, n_jobs=n_jobs, max_samples= 1.0/n_estimators, verbose = 1)
     regr.fit(x_train, y_train)
     end = time.time()
     print(end-start)
     if save:
-        prefix_models = f'svr_ch{charge}'
-        joblib.dump(regr, prefix_models)
+        prefix_models = paths.get_paths()['models']
+        name_model = f'svr_ch{charge}_rt'
+        joblib.dump(regr, prefix_models+'svr_dip/'+name_model)
     return regr
 if __name__ == "__main__":
     # %%
